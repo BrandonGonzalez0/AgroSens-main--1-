@@ -1,0 +1,17 @@
+{
+  "tomate": {
+    "ph": [6, 7],
+    "humedad": [60, 80],
+    "temperatura": [18, 28]
+  },
+  "maiz": {
+    "ph": [5.5, 7.5],
+    "humedad": [50, 70],
+    "temperatura": [20, 30]
+  },
+  "palta": {
+    "ph": [6, 7.5],
+    "humedad": [55, 75],
+    "temperatura": [15, 25]
+  }
+}
