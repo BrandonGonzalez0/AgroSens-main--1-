@@ -326,7 +326,7 @@ function App() {
         onClick={() => setDarkMode(!darkMode)}
         className="mt-6 px-4 py-2 rounded-xl bg-gray-700 text-white dark:bg-yellow-400 dark:text-black shadow hover:scale-105 transition-transform"
       >
-        {darkMode ? "☀️ Modo Claro" : "🌙 Modo Oscuro"}
+        {darkMode ? "☀️ Modo Dia" : "🌙 Modo Noche"}
       </button>
     </div>
   );
