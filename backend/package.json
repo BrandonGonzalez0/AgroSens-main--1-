@@ -1,0 +1,9 @@
+{
+"name": "agrosens-backend",
+"private": true,
+"type": "module",
+"dependencies": {
+"cors": "^2.8.5",
+"mongoose": "^8.18.1"
+}
+}
