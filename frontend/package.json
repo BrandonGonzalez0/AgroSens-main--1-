@@ -14,8 +14,9 @@
     "vite": "^4.5.14"
   },
   "scripts": {
-    "start": "vite",
+    "prebuild": "chmod -R 755 ./node_modules/.bin",  
     "build": "vite build",
+    "start": "vite",
     "preview": "vite preview"
   },
   "eslintConfig": {
