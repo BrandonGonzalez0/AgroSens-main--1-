@@ -1,9 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './index.css'; // Si usas Tailwind o cualquier otro CSS
-import App from './App'; // Asegúrate de que App esté correctamente importado
+import './index.css';  // Asegúrate de que este archivo esté siendo importado correctamente
+import App from './App';
 
-const root = ReactDOM.createRoot(document.getElementById('root')); 
+const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <App />

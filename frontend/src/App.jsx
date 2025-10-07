@@ -253,54 +253,6 @@ function App() {
                   ))}
                 </ul>
               )}
-
-              {/* --- Dashboard comparativo dinámico --- */}
-              {modo === "definido" &&
-                cultivo &&
-                cultivosDB[cultivo.toLowerCase()] && (
-                  <div className="mt-6">
-                    <h3 className="font-semibold mb-2">
-                      Requerimientos vs valores actuales
-                    </h3>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart
-                        data={[
-                          {
-                            parametro: "pH",
-                            Actual: Number(ph),
-                            Ideal:
-                              (cultivosDB[cultivo.toLowerCase()].ph[0] +
-                                cultivosDB[cultivo.toLowerCase()].ph[1]) /
-                              2,
-                          },
-                          {
-                            parametro: "Humedad (%)",
-                            Actual: Number(humedad),
-                            Ideal:
-                              (cultivosDB[cultivo.toLowerCase()].humedad[0] +
-                                cultivosDB[cultivo.toLowerCase()].humedad[1]) /
-                              2,
-                          },
-                          {
-                            parametro: "Temperatura (°C)",
-                            Actual: Number(temperatura),
-                            Ideal:
-                              (cultivosDB[cultivo.toLowerCase()].temperatura[0] +
-                                cultivosDB[cultivo.toLowerCase()].temperatura[1]) /
-                              2,
-                          },
-                        ]}
-                      >
-                        <XAxis dataKey="parametro" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="Actual" fill="#f87171" />
-                        <Bar dataKey="Ideal" fill="#34d399" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
             </motion.div>
           )}
         </div>
