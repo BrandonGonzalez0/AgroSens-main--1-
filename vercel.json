@@ -1,12 +1,11 @@
 {
-    "routes": [
-        {
-            "src":"/",
-            "dest": "/"
-        },
-        {
-            "src":"/test",
-            "dest": "/"
-        }
-    ]
+  "builds": [
+    { "src": "frontend/package.json", "use": "@vercel/static-build" }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/build/index.html"
+    }
+  ]
 }
