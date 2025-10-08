@@ -1,11 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  build: {
-    outDir: 'dist',  // Esto es donde Vite colocará los archivos de producción
+  server: {
+    port: 5173, // Esto es para asegurarse de que el servidor de desarrollo use el puerto correcto
   },
-  base: '/',  // Asegúrate de que esté configurado correctamente para producción
+  build: {
+    outDir: 'dist', // Esto asegura que la salida de la construcción se guarde en la carpeta dist
+  },
+  base: '/',  // Asegúrate de que la base esté configurada correctamente para el entorno de producción
 });
