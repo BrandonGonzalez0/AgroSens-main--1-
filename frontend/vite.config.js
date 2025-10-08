@@ -7,4 +7,5 @@ export default defineConfig({
   build: {
     outDir: 'dist',  // Esto es donde Vite colocará los archivos de producción
   },
+  base: '/',  // Asegúrate de que esté configurado correctamente para producción
 });
