@@ -5,9 +5,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: 'dist',  // Asegúrate de que esté configurado para generar en 'dist/'
-    rollupOptions: {
-      input: './index.html',  // Asegúrate de que esté apuntando al archivo correcto
-    },
+    outDir: 'dist',  // Esto es donde Vite colocará los archivos de producción
   },
 });
