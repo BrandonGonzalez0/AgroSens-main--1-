@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import logo from "./logo.png";
 import { motion } from "framer-motion";
 import { validarCultivo, sugerirCultivos, cultivos } from "./ServiciosCultivos";
@@ -159,6 +159,12 @@ function App() {
   // UI para modo sugerido
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCultivo, setSelectedCultivo] = useState(null);
+  // Cámara / IA
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   // Splash screen
   useEffect(() => {
@@ -174,6 +180,106 @@ function App() {
       document.documentElement.classList.remove("dark");
     }
   }, [darkMode]);
+
+  // Inicia la cámara mostrando modal
+  const startCamera = async () => {
+    try {
+      setAnalysisResult(null);
+      setCameraOpen(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+    } catch (err) {
+      console.error("No se pudo acceder a la cámara", err);
+      setCameraOpen(false);
+    }
+  };
+
+  const stopCamera = () => {
+    try {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const tracks = videoRef.current.srcObject.getTracks();
+        tracks.forEach(t => t.stop());
+        videoRef.current.srcObject = null;
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+    setCameraOpen(false);
+    setAnalyzing(false);
+  };
+
+  // Heurística simple de análisis: color dominante y tamaño relativo
+  const captureAndAnalyze = async () => {
+    if (!videoRef.current) return;
+    setAnalyzing(true);
+    const video = videoRef.current;
+    const w = video.videoWidth || 640;
+    const h = video.videoHeight || 480;
+    const canvas = canvasRef.current;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, w, h);
+    const img = ctx.getImageData(0, 0, w, h);
+    const data = img.data;
+
+    let rSum = 0, gSum = 0, bSum = 0, count = 0;
+    let plantPixels = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i+1], b = data[i+2];
+      rSum += r; gSum += g; bSum += b; count++;
+      // detect pixel verde/plant-like: green significantly higher than other channels
+      if (g > 80 && g > r + 15) plantPixels++;
+    }
+    const avgR = rSum / count;
+    const avgG = gSum / count;
+    const avgB = bSum / count;
+    const greenRatio = plantPixels / count; // proporción de píxeles que parecen planta
+    const redPortion = avgR / (avgR + avgG + avgB + 1e-6);
+
+    // regla por cultivo (si está seleccionado)
+    const key = normalizeKey(cultivo || '');
+    let verdict = 'Insuficiente información';
+    let estimateDays = null;
+
+    if (key.includes('tomate') || key.includes('tomato')) {
+      // tomate: más rojo => más maduro
+      if (redPortion > 0.35) verdict = 'Maduro';
+      else {
+        verdict = 'No maduro';
+        estimateDays = Math.max(1, Math.round((0.35 - redPortion) * 60));
+      }
+    } else if (key.includes('palta') || key.includes('aguacate') || key.includes('avocado')) {
+      // palta: usamos tamaño relativo y color verde oscuro como proxy
+      if (greenRatio > 0.02 && avgG < 120) verdict = 'Probablemente madura';
+      else {
+        verdict = 'Necesita más crecimiento/maduración';
+        estimateDays = Math.max(2, Math.round((0.02 - greenRatio) * 200));
+      }
+    } else {
+      // regla genérica: tamaño relativo indica crecimiento; color verde madura para hojas
+      if (greenRatio > 0.02) verdict = 'Planta con buen desarrollo';
+      else {
+        verdict = 'Planta pequeña o fondo dominante';
+        estimateDays = Math.max(3, Math.round((0.02 - greenRatio) * 150));
+      }
+    }
+
+    const result = {
+      avg: { r: Math.round(avgR), g: Math.round(avgG), b: Math.round(avgB) },
+      greenRatio: Number(greenRatio.toFixed(4)),
+      redPortion: Number(redPortion.toFixed(4)),
+      verdict,
+      estimateDays,
+      timestamp: Date.now()
+    };
+
+    setAnalysisResult(result);
+    setAnalyzing(false);
+  };
 
   const handleValidar = () => {
     const res = validarCultivo(cultivo, ph, humedad, temperatura);
@@ -259,12 +365,49 @@ function App() {
           🤝 Modo Cultivo Sugerido
         </motion.button>
 
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          className="mt-6 px-4 py-2 rounded-xl bg-gray-700 text-white dark:bg-yellow-400 dark:text-black shadow hover:scale-105 transition-transform"
-        >
-          {darkMode ? "☀️ Modo Claro" : "🌙 Modo Oscuro"}
-        </button>
+        <div className="mt-4 flex flex-col items-center gap-3">
+          <button onClick={startCamera} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">🔍 Analizar con cámara (IA)</button>
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className="px-4 py-2 rounded-xl bg-gray-700 text-white dark:bg-yellow-400 dark:text-black shadow hover:scale-105 transition-transform"
+          >
+            {darkMode ? "☀️ Modo Claro" : "🌙 Modo Oscuro"}
+          </button>
+        </div>
+        {/* Modal de cámara para la pantalla de selección (mismo comportamiento que el modal dentro del formulario) */}
+        {cameraOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 w-[90%] max-w-3xl">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-bold">Análisis por cámara</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => { captureAndAnalyze(); }} className="px-3 py-1 bg-green-600 text-white rounded">Analizar</button>
+                  <button onClick={stopCamera} className="px-3 py-1 bg-gray-300 dark:bg-gray-700 rounded">Cerrar</button>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <video ref={videoRef} className="w-full rounded" playsInline muted />
+                  <canvas ref={canvasRef} className="hidden" />
+                </div>
+                <div>
+                  <h4 className="font-semibold">Resultado</h4>
+                  {analyzing ? <div className="text-sm">Analizando...</div> : (
+                    analysisResult ? (
+                      <div className="text-sm space-y-2">
+                        <div><strong>Veredicto:</strong> {analysisResult.verdict}</div>
+                        {analysisResult.estimateDays && <div><strong>Estimación:</strong> ~{analysisResult.estimateDays} días</div>}
+                        <div><strong>Color promedio:</strong> R {analysisResult.avg.r} G {analysisResult.avg.g} B {analysisResult.avg.b}</div>
+                        <div><strong>Proporción verde:</strong> {analysisResult.greenRatio}</div>
+                      </div>
+                    ) : <div className="text-sm text-gray-600">Captura una imagen y presiona Analizar.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -277,7 +420,15 @@ function App() {
       </h1>
 
       {modo === "definido" ? (
-        <div className="w-full max-w-4xl grid md:grid-cols-2 gap-6">
+        <div className="w-full max-w-4xl">
+          <div className="flex justify-between items-center mb-4">
+            <div />
+            <div className="flex gap-2">
+              <button onClick={() => { setModo(null); setResultado(null); }} className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-sm rounded-lg">⬅ Volver</button>
+              <button onClick={() => setDarkMode(!darkMode)} className="px-3 py-1 bg-gray-800 text-white rounded">{darkMode ? '☀️' : '🌙'}</button>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg transition-colors">
             <div className="mb-4">
               <label className="block mb-1 font-semibold">Selecciona el cultivo</label>
@@ -344,9 +495,16 @@ function App() {
               <div className="text-sm text-gray-600">Selecciona un cultivo para ver la tarjeta aquí.</div>
             )}
           </div>
+          </div>
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg w-full max-w-md transition-colors">
+          <div className="flex justify-end mb-3">
+            <div className="flex gap-2">
+              <button onClick={() => { setModo(null); setResultado(null); }} className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-sm rounded-lg">⬅ Volver</button>
+              <button onClick={() => setDarkMode(!darkMode)} className="px-3 py-1 bg-gray-800 text-white rounded">{darkMode ? '☀️' : '🌙'}</button>
+            </div>
+          </div>
           <div className="mb-4">
             <label className="block mb-1 font-semibold">pH</label>
             <input
@@ -388,6 +546,46 @@ function App() {
           >
             Sugerir Cultivos
           </motion.button>
+        </div>
+      )}
+
+      {/* Botón para análisis por cámara con IA */}
+      <div className="mt-4">
+        <button onClick={startCamera} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">🔍 Analizar con cámara (IA)</button>
+      </div>
+
+      {/* Modal de cámara */}
+      {cameraOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 w-[90%] max-w-3xl">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold">Análisis por cámara</h3>
+              <div className="flex gap-2">
+                <button onClick={() => { captureAndAnalyze(); }} className="px-3 py-1 bg-green-600 text-white rounded">Analizar</button>
+                <button onClick={stopCamera} className="px-3 py-1 bg-gray-300 dark:bg-gray-700 rounded">Cerrar</button>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <video ref={videoRef} className="w-full rounded" playsInline muted />
+                <canvas ref={canvasRef} className="hidden" />
+              </div>
+              <div>
+                <h4 className="font-semibold">Resultado</h4>
+                {analyzing ? <div className="text-sm">Analizando...</div> : (
+                  analysisResult ? (
+                    <div className="text-sm space-y-2">
+                      <div><strong>Veredicto:</strong> {analysisResult.verdict}</div>
+                      {analysisResult.estimateDays && <div><strong>Estimación:</strong> ~{analysisResult.estimateDays} días</div>}
+                      <div><strong>Color promedio:</strong> R {analysisResult.avg.r} G {analysisResult.avg.g} B {analysisResult.avg.b}</div>
+                      <div><strong>Proporción verde:</strong> {analysisResult.greenRatio}</div>
+                    </div>
+                  ) : <div className="text-sm text-gray-600">Captura una imagen y presiona Analizar.</div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -514,28 +712,7 @@ function App() {
         </div>
       )}
 
-      {/* Botón volver */}
-      <button
-        onClick={() => {
-          setModo(null);
-          setResultado(null);
-          setCultivo("");
-          setPh("");
-          setHumedad("");
-          setTemperatura("");
-        }}
-        className="mt-6 underline text-sm"
-      >
-        ⬅ Volver a seleccionar modo
-      </button>
-
-      {/* Botón dark mode */}
-      <button
-        onClick={() => setDarkMode(!darkMode)}
-        className="mt-6 px-4 py-2 rounded-xl bg-gray-700 text-white dark:bg-yellow-400 dark:text-black shadow hover:scale-105 transition-transform"
-      >
-        {darkMode ? "☀️ Modo Claro" : "🌙 Modo Oscuro"}
-      </button>
+      {/* botones de navegación están dentro de cada formulario */}
     </div>
   );
 }
