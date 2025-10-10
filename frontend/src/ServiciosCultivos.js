@@ -144,12 +144,74 @@ const cultivos = [
 ];
 
 // --- Validación simple ---
+// Helper: parse ranges like "6.0 - 7.0", "60% - 80%", "15°C - 22°C"
+function parseRange(rangeStr) {
+  if (!rangeStr || typeof rangeStr !== 'string') return null;
+  // Keep digits, dot, comma, minus and percent/degree symbols; then split on '-'
+  const parts = rangeStr.split('-').map(p => p.replace(/[^0-9.,]/g, '').trim().replace(',', '.'));
+  if (parts.length < 2) return null;
+  const min = parseFloat(parts[0]);
+  const max = parseFloat(parts[1]);
+  if (isNaN(min) || isNaN(max)) return null;
+  return [min, max];
+}
+
+function parseInputValue(v) {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v === 'string') {
+    return parseFloat(v.replace(/[^0-9.,-]/g, '').trim().replace(',', '.'));
+  }
+  return Number(v);
+}
+
 export function validarCultivo(nombre, ph, humedad, temperatura) {
+  if (!nombre) return { viable: false, mensaje: 'No se indicó el nombre del cultivo.' };
   const cultivo = cultivos.find(c => c.nombre.toLowerCase() === nombre.toLowerCase());
   if (!cultivo) {
     return { viable: false, mensaje: "Cultivo no encontrado en la base de datos." };
   }
-  return { viable: true, mensaje: `${cultivo.nombre} es viable según tus condiciones.` };
+
+  const phRange = parseRange(cultivo.ph);
+  const humRange = parseRange(cultivo.humedad);
+  const tempRange = parseRange(cultivo.temperatura);
+
+  const phVal = parseInputValue(ph);
+  const humVal = parseInputValue(humedad);
+  const tempVal = parseInputValue(temperatura);
+
+  const missing = [];
+  if (phVal === null || isNaN(phVal)) missing.push('pH');
+  if (humVal === null || isNaN(humVal)) missing.push('Humedad');
+  if (tempVal === null || isNaN(tempVal)) missing.push('Temperatura');
+
+  if (missing.length > 0) {
+    return {
+      viable: false,
+      mensaje: `Faltan o no son válidos los siguientes valores: ${missing.join(', ')}.`,
+      detalles: { ph: phVal, humedad: humVal, temperatura: tempVal }
+    };
+  }
+
+  const phOk = phRange ? (phVal >= phRange[0] && phVal <= phRange[1]) : true;
+  const humOk = humRange ? (humVal >= humRange[0] && humVal <= humRange[1]) : true;
+  const tempOk = tempRange ? (tempVal >= tempRange[0] && tempVal <= tempRange[1]) : true;
+
+  const viable = phOk && humOk && tempOk;
+
+  const motivos = [];
+  if (!phOk) motivos.push(`pH (${phVal}) fuera de rango [${phRange ? phRange.join('-') : 'n/a'}]`);
+  if (!humOk) motivos.push(`Humedad (${humVal}) fuera de rango [${humRange ? humRange.join('-') : 'n/a'}]`);
+  if (!tempOk) motivos.push(`Temperatura (${tempVal}) fuera de rango [${tempRange ? tempRange.join('-') : 'n/a'}]`);
+
+  return {
+    viable,
+    mensaje: viable ? `${cultivo.nombre} es apto para tus condiciones.` : `${cultivo.nombre} no es apto: ${motivos.join('; ')}`,
+    detalles: {
+      ph: { valor: phVal, rango: phRange },
+      humedad: { valor: humVal, rango: humRange },
+      temperatura: { valor: tempVal, rango: tempRange }
+    }
+  };
 }
 
 // --- Sugerencias (filtrado simple) ---

@@ -3,7 +3,10 @@ import logo from "./logo.png";
 import { motion } from "framer-motion";
 import { validarCultivo, sugerirCultivos, cultivos } from "./ServiciosCultivos";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import TelemetryDashboard from './TelemetryDashboard';
 import cultivosDB from "./data/cultivos.json";
+import { enqueueItem, getPendingItems, addReadingLocally } from './lib/offlineDB';
+import { flushQueue } from './lib/sync';
 
 // Normaliza un nombre para buscar en cultivosDB (quita acentos, espacios y minúsculas)
 function normalizeKey(name) {
@@ -15,6 +18,30 @@ function normalizeKey(name) {
     .replace(/\p{Diacritic}/gu, '')
     .replace(/\s+/g, '')
     .replace(/[^a-z0-9]/g, '');
+}
+
+// Devuelve una sugerencia breve según el parámetro y su rango
+function getSuggestionFor(paramLabel, value, range) {
+  if (!range || !Array.isArray(range)) return 'Revisar condiciones del cultivo.';
+  const v = Number(value);
+  if (isNaN(v)) return 'Introduce un valor numérico válido.';
+
+  if (paramLabel.toLowerCase().includes('ph')) {
+    if (v < range[0]) return 'Aumentar pH: aplicar cal agrícola y monitorizar cada semana.';
+    if (v > range[1]) return 'Reducir pH: aplicar azufre o enmiendas ácidas.';
+  }
+
+  if (paramLabel.toLowerCase().includes('humedad')) {
+    if (v < range[0]) return 'Incrementar humedad: aumentar riego o mulching.';
+    if (v > range[1]) return 'Reducir humedad: mejorar drenaje y reducir riegos.';
+  }
+
+  if (paramLabel.toLowerCase().includes('temperatura')) {
+    if (v < range[0]) return 'Aumentar temperatura: coberturas, invernadero o calefacción.';
+    if (v > range[1]) return 'Reducir temperatura: sombreo, ventilación o mallas.';
+  }
+
+  return 'Ajustar según buenas prácticas agronómicas.';
 }
 
 // --- Carta de cultivo ---
@@ -31,13 +58,11 @@ function CultivoCard({ cultivo, onClick, selected }) {
       }`}
     >
       <div className="w-full h-36 overflow-hidden rounded-xl mb-3">
-        <a href={cultivo.imagen} target="_blank" rel="noreferrer">
-          <img
-            src={cultivo.imagen}
-            alt={cultivo.nombre}
-            className="w-full h-full object-cover hover:opacity-90 transition-opacity"
-          />
-        </a>
+        <img
+          src={cultivo.imagen}
+          alt={cultivo.nombre}
+          className="w-full h-full object-cover hover:opacity-90 transition-opacity pointer-events-none"
+        />
       </div>
       <h3 className="text-lg font-bold text-green-700 dark:text-green-300 mb-1">{cultivo.nombre}</h3>
       <div className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
@@ -143,6 +168,11 @@ function DetallePanel({ item, onClose, currentPh, currentHum, currentTemp }) {
           </ul>
         </div>
       )}
+
+      {/* Nota: el gráfico comparativo se muestra únicamente en el modo 'definido' al validar un cultivo. */}
+      <div className="mt-4">
+        <p className="text-sm text-gray-500">El gráfico comparativo (Actual vs Ideal) se muestra en el panel de validación cuando trabajas en el modo <strong>Definido</strong>.</p>
+      </div>
     </motion.div>
   );
 }
@@ -166,12 +196,45 @@ function App() {
   const streamRef = useRef(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [showTelemetry, setShowTelemetry] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   // Reloj en tiempo real para la pantalla principal
   const [now, setNow] = useState(new Date());
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const onBefore = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('beforeinstallprompt', onBefore);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBefore);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  // refresh pending count periodically
+  useEffect(() => {
+    let mounted = true;
+    async function loadPending() {
+      const items = await getPendingItems();
+      if (mounted) setPendingCount(items.length);
+    }
+    loadPending();
+    const id = setInterval(loadPending, 3000);
+    return () => { mounted = false; clearInterval(id); };
   }, []);
 
   // Splash screen
@@ -311,22 +374,45 @@ function App() {
   const handleValidar = () => {
     const res = validarCultivo(cultivo, ph, humedad, temperatura);
 
+    // If offline, enqueue the reading to send later
+    if (!navigator.onLine) {
+      const payload = {
+        deviceId: cultivo || 'manual-entry',
+        timestamp: new Date().toISOString(),
+        ph: parseFloat(ph) || null,
+        soilMoisture: parseFloat(humedad) || null,
+        temperature: parseFloat(temperatura) || null
+      };
+      // save locally in readings cache and outbox
+      addReadingLocally(payload).then(() => {
+        enqueueItem({ type: 'reading', payload }).then((e) => {
+          setResultado({ viable: res.viable, mensaje: `📥 Lectura guardada localmente y en cola para sincronizar. ${res.mensaje || ''}`, detalles: res.detalles || null });
+        }).catch(() => {
+          setResultado({ viable: res.viable, mensaje: `📥 Lectura guardada localmente (no se pudo encolar). ${res.mensaje || ''}`, detalles: res.detalles || null });
+        });
+      }).catch(() => {
+        setResultado({ viable: res.viable, mensaje: `📥 Error guardando localmente. ${res.mensaje || ''}`, detalles: res.detalles || null });
+      });
+      return;
+    }
+
     if (res.viable) {
       setResultado({
         viable: true,
-        mensaje: `✅ El cultivo de ${cultivo} es APTO para tus condiciones. 
-        Puedes proceder con la plantación sin problemas.`,
+        mensaje: `✅ ${res.mensaje}`,
+        detalles: res.detalles || null,
       });
     } else {
       setResultado({
         viable: false,
-        mensaje: `❌ El cultivo de ${cultivo} NO es apto actualmente.`,
+        mensaje: `❌ ${res.mensaje}`,
         pasos: [
           "Ajustar el pH del suelo aplicando enmiendas (cal para subirlo, azufre para bajarlo).",
           "Mejorar la retención de humedad usando riego por goteo o cobertura orgánica.",
           "Optimizar la temperatura mediante invernaderos, mallas de sombreo o ventilación.",
           "Realizar un análisis de suelo para identificar nutrientes faltantes.",
         ],
+        detalles: res.detalles || null,
       });
     }
   };
@@ -345,6 +431,9 @@ function App() {
     const term = searchTerm.trim().toLowerCase();
     return resultado.sugerencias.filter(s => s.nombre.toLowerCase().includes(term));
   }, [resultado, searchTerm]);
+
+  // Estado derivado: si la validación devolvió viable
+  const isViable = resultado && resultado.viable;
 
   // --- Splash ---
   if (loading) {
@@ -392,7 +481,19 @@ function App() {
             AgroSens — Herramientas para tu cultivo
           </motion.h1>
 
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Elige cómo quieres trabajar hoy · <span className="font-medium">{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(now)}</span></p>
+          <div className="mt-1 flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+            <div>Elige cómo quieres trabajar hoy · <span className="font-medium">{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(now)}</span></div>
+            <div className={`px-2 py-1 rounded text-xs ${isOnline ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{isOnline ? 'Online' : 'Offline'}</div>
+            {deferredPrompt && (
+              <button className="ml-2 px-2 py-1 bg-blue-600 text-white rounded text-xs" onClick={async () => {
+                deferredPrompt.prompt();
+                const choice = await deferredPrompt.userChoice;
+                setDeferredPrompt(null);
+                console.log('PWA install choice', choice);
+              }}>Instalar App</button>
+            )}
+            <div className="ml-4 text-sm">Pendientes: <span className="font-medium">{pendingCount}</span></div>
+          </div>
 
           {/* Form creativo con los 4 botones principales */}
           <form className="mt-6 w-full max-w-2xl bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm p-6 rounded-3xl shadow-lg grid grid-cols-2 gap-4">
@@ -623,11 +724,27 @@ function App() {
         </div>
       )}
 
-      {/* Botón para análisis por cámara con IA */}
+      {/* Este es el botón para análisis por cámara con IA */}
       <div className="mt-4">
         <button onClick={startCamera} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">🔍 Analizar con cámara (IA)</button>
+        <button onClick={() => setShowTelemetry(true)} className="ml-2 px-4 py-2 bg-gray-700 text-white rounded-lg">📡 Telemetría (POC)</button>
       </div>
 
+      {/* Telemetry modal */}
+      {showTelemetry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 w-[95%] max-w-4xl">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold">Telemetry POC</h3>
+              <div className="flex gap-2">
+                  <button onClick={() => setShowTelemetry(false)} className="px-3 py-1 bg-gray-300 dark:bg-gray-700 rounded">Cerrar</button>
+                  <button onClick={async () => { const res = await flushQueue(); console.log('Flush results', res); }} className="px-3 py-1 bg-green-600 text-white rounded">Sincronizar ahora</button>
+              </div>
+            </div>
+            <TelemetryDashboard deviceId="sensor-001" />
+          </div>
+        </div>
+      )}
       {/* Modal de cámara */}
       {cameraOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
@@ -722,71 +839,104 @@ function App() {
                 </ul>
               )}
 
-              {modo === "definido" && cultivo && (
-                <div className="mt-4">
-                  <h3 className="font-semibold mb-2">Detalles del cultivo seleccionado</h3>
-                  {/* buscar datos en la lista 'cultivos' exportada */}
-                  {(() => {
-                    const found = cultivos.find(c => normalizeKey(c.nombre) === normalizeKey(cultivo));
-                    if (found) return <CultivoCard cultivo={found} onClick={() => {}} selected={true} />;
-                    return <div className="text-sm text-gray-600">No se encontró información del cultivo seleccionado.</div>;
-                  })()}
+              {modo === "definido" && cultivo && cultivosDB[normalizeKey(cultivo)] && (
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                  <div className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow ${isViable ? 'ring-2 ring-green-400' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold mb-2">Detalles del cultivo seleccionado</h3>
+                      {isViable && <span className="text-xs bg-green-600 text-white px-2 py-1 rounded-full">Apto</span>}
+                    </div>
+                    {/* buscar datos en la lista 'cultivos' exportada */}
+                    {(() => {
+                      const found = cultivos.find(c => normalizeKey(c.nombre) === normalizeKey(cultivo));
+                      if (found) return <CultivoCard cultivo={found} onClick={() => {}} selected={true} />;
+                      return <div className="text-sm text-gray-600">No se encontró información del cultivo seleccionado.</div>;
+                    })()}
+                  </div>
+
+                  <div className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow ${isViable ? 'border-l-4 border-green-500' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold mb-2">Requerimientos vs valores actuales</h3>
+                      {isViable && <div className="text-sm text-green-600">Plantilla: {cultivo}</div>}
+                    </div>
+                    {(() => {
+                      // Cuando el cultivo es apto, usamos su propia plantilla (rango ideal) como referencia
+                      const idealKey = (resultado && resultado.viable) ? normalizeKey(cultivo) : normalizeKey(cultivo);
+                      const idealDb = cultivosDB[idealKey] || { ph: [0, 0], humedad: [0, 0], temperatura: [0, 0] };
+
+                      const chartData = [
+                        {
+                          parametro: 'pH',
+                          Actual: Number(ph) || 0,
+                          Ideal: idealDb && Array.isArray(idealDb.ph) ? (Number(idealDb.ph[0]) + Number(idealDb.ph[1])) / 2 : 0,
+                        },
+                        {
+                          parametro: 'Humedad (%)',
+                          Actual: Number(humedad) || 0,
+                          Ideal: idealDb && Array.isArray(idealDb.humedad) ? (Number(idealDb.humedad[0]) + Number(idealDb.humedad[1])) / 2 : 0,
+                        },
+                        {
+                          parametro: 'Temperatura (°C)',
+                          Actual: Number(temperatura) || 0,
+                          Ideal: idealDb && Array.isArray(idealDb.temperatura) ? (Number(idealDb.temperatura[0]) + Number(idealDb.temperatura[1])) / 2 : 0,
+                        },
+                      ];
+
+                      return (
+                        <div>
+                          <div className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+                            {resultado && resultado.detalles ? (
+                              (() => {
+                                const det = resultado.detalles;
+                                const rows = [];
+
+                                const makeRow = (label, obj) => {
+                                  const val = obj && obj.valor !== undefined && obj.valor !== null ? obj.valor : 'n/a';
+                                  const rango = obj && obj.rango ? obj.rango.join(' - ') : 'n/a';
+                                  const outOfRange = obj && obj.rango ? !(val >= obj.rango[0] && val <= obj.rango[1]) : false;
+                                  return (
+                                    <div key={label} className={`flex items-start justify-between ${outOfRange ? 'text-red-600' : ''}`}>
+                                      <div>
+                                        <strong>{label}:</strong> {val} <span className="text-xs text-gray-500">(ideal: {rango})</span>
+                                        {outOfRange && <div className="text-xs mt-1">⚠️ {getSuggestionFor(label, val, obj && obj.rango)}</div>}
+                                      </div>
+                                    </div>
+                                  );
+                                };
+
+                                rows.push(makeRow('pH', det.ph));
+                                rows.push(makeRow('Humedad', det.humedad));
+                                rows.push(makeRow('Temperatura', det.temperatura));
+
+                                return <div className="space-y-2">{rows}</div>;
+                              })()
+                            ) : (
+                              <div className="text-sm text-gray-600">Introduce los valores y pulsa Validar para ver detalles.</div>
+                            )}
+                          </div>
+
+                          <ResponsiveContainer width="100%" height={250}>
+                            <BarChart data={chartData}>
+                              <XAxis dataKey="parametro" />
+                              <YAxis />
+                              <Tooltip />
+                              <Legend />
+                              <Bar dataKey="Actual" fill="#f87171" />
+                              <Bar dataKey="Ideal" fill="#34d399" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
-
-              {/* --- Dashboard comparativo dinámico --- */}
-              {modo === "definido" &&
-                cultivo &&
-                cultivosDB[normalizeKey(cultivo)] && (
-                  <div className="mt-6">
-                    <h3 className="font-semibold mb-2">
-                      Requerimientos vs valores actuales
-                    </h3>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart
-                        data={[
-                          {
-                            parametro: "pH",
-                            Actual: Number(ph),
-                            Ideal:
-                              (cultivosDB[normalizeKey(cultivo)].ph[0] +
-                                cultivosDB[normalizeKey(cultivo)].ph[1]) /
-                              2,
-                          },
-                          {
-                            parametro: "Humedad (%)",
-                            Actual: Number(humedad),
-                            Ideal:
-                              (cultivosDB[normalizeKey(cultivo)].humedad[0] +
-                                cultivosDB[normalizeKey(cultivo)].humedad[1]) /
-                              2,
-                          },
-                          {
-                            parametro: "Temperatura (°C)",
-                            Actual: Number(temperatura),
-                            Ideal:
-                              (cultivosDB[normalizeKey(cultivo)].temperatura[0] +
-                                cultivosDB[normalizeKey(cultivo)].temperatura[1]) /
-                              2,
-                          },
-                        ]}
-                      >
-                        <XAxis dataKey="parametro" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="Actual" fill="#f87171" />
-                        <Bar dataKey="Ideal" fill="#34d399" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
             </motion.div>
           )}
         </div>
       )}
 
-      {/* botones de navegación están dentro de cada formulario */}
+      {/* estos son los botones que estan dentro del form para viaja entre el proyecto */}
     </div>
   );
 }
