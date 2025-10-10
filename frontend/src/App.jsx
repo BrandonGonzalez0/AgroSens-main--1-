@@ -163,8 +163,16 @@ function App() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const streamRef = useRef(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  // Reloj en tiempo real para la pantalla principal
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Splash screen
   useEffect(() => {
@@ -187,10 +195,26 @@ function App() {
       setAnalysisResult(null);
       setCameraOpen(true);
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      streamRef.current = stream;
+
+      // Intentar adjuntar el stream al video cuando el elemento esté montado.
+      const attach = async (tries = 0) => {
+        if (videoRef.current) {
+          try {
+            videoRef.current.srcObject = stream;
+            await videoRef.current.play();
+          } catch (e) {
+            console.warn('Error al reproducir video', e);
+          }
+        } else if (tries < 20) {
+          // reintentar en 100ms
+          setTimeout(() => attach(tries + 1), 100);
+        } else {
+          console.warn('No se pudo montar videoRef para la cámara');
+        }
+      };
+
+      attach();
     } catch (err) {
       console.error("No se pudo acceder a la cámara", err);
       setCameraOpen(false);
@@ -199,11 +223,14 @@ function App() {
 
   const stopCamera = () => {
     try {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const tracks = videoRef.current.srcObject.getTracks();
+      // stop stream from streamRef or from video element
+      const s = streamRef.current || (videoRef.current && videoRef.current.srcObject);
+      if (s && s.getTracks) {
+        const tracks = s.getTracks();
         tracks.forEach(t => t.stop());
-        videoRef.current.srcObject = null;
       }
+      if (videoRef.current) videoRef.current.srcObject = null;
+      streamRef.current = null;
     } catch (e) {
       console.warn(e);
     }
@@ -347,67 +374,114 @@ function App() {
   if (!modo) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-r from-green-100 via-green-200 to-green-300 dark:from-gray-800 dark:via-gray-900 dark:to-black text-gray-800 dark:text-gray-100 p-6 transition-colors">
-        <h1 className="text-3xl font-bold mb-6">Selecciona el modo de uso</h1>
-        <motion.button
-          onClick={() => setModo("definido")}
-          className="w-64 bg-green-700 text-white py-3 rounded-xl font-semibold mb-4 shadow-md hover:bg-green-800"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          🌱 Modo Cultivo Definido
-        </motion.button>
-        <motion.button
-          onClick={() => setModo("sugerido")}
-          className="w-64 bg-blue-600 text-white py-3 rounded-xl font-semibold shadow-md hover:bg-blue-700"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          🤝 Modo Cultivo Sugerido
-        </motion.button>
-
-        <div className="mt-4 flex flex-col items-center gap-3">
-          <button onClick={startCamera} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">🔍 Analizar con cámara (IA)</button>
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className="px-4 py-2 rounded-xl bg-gray-700 text-white dark:bg-yellow-400 dark:text-black shadow hover:scale-105 transition-transform"
+        <div className="flex flex-col items-center gap-4">
+          <motion.img
+            src={logo}
+            alt="AgroSens Logo"
+            className="w-36 h-36 drop-shadow-lg"
+            initial={{ scale: 0.8, rotate: -6, opacity: 0 }}
+            animate={{ scale: [0.9, 1.05, 1], rotate: [ -6, 4, 0], opacity: 1 }}
+            transition={{ duration: 1.2, repeat: 0, ease: 'easeOut' }}
+          />
+          <motion.h1
+            className="text-4xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-green-700 via-green-400 to-teal-300"
+            initial={{ y: -10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.8, ease: 'easeOut' }}
           >
-            {darkMode ? "☀️ Modo Claro" : "🌙 Modo Oscuro"}
-          </button>
-        </div>
-        {/* Modal de cámara para la pantalla de selección (mismo comportamiento que el modal dentro del formulario) */}
-        {cameraOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 w-[90%] max-w-3xl">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="font-bold">Análisis por cámara</h3>
-                <div className="flex gap-2">
-                  <button onClick={() => { captureAndAnalyze(); }} className="px-3 py-1 bg-green-600 text-white rounded">Analizar</button>
-                  <button onClick={stopCamera} className="px-3 py-1 bg-gray-300 dark:bg-gray-700 rounded">Cerrar</button>
-                </div>
-              </div>
+            AgroSens — Herramientas para tu cultivo
+          </motion.h1>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <video ref={videoRef} className="w-full rounded" playsInline muted />
-                  <canvas ref={canvasRef} className="hidden" />
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Elige cómo quieres trabajar hoy · <span className="font-medium">{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(now)}</span></p>
+
+          {/* Form creativo con los 4 botones principales */}
+          <form className="mt-6 w-full max-w-2xl bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm p-6 rounded-3xl shadow-lg grid grid-cols-2 gap-4">
+            <motion.button
+              type="button"
+              onClick={() => setModo('definido')}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex flex-col items-start gap-2 p-4 rounded-2xl bg-gradient-to-br from-green-600 to-green-500 text-white shadow-lg"
+            >
+              <div className="text-2xl">🌱</div>
+              <div className="text-sm font-semibold">Modo Cultivo Definido</div>
+              <div className="text-xs opacity-90">Valida un cultivo con datos específicos</div>
+            </motion.button>
+
+            <motion.button
+              type="button"
+              onClick={() => setModo('sugerido')}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex flex-col items-start gap-2 p-4 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-lg"
+            >
+              <div className="text-2xl">🤝</div>
+              <div className="text-sm font-semibold">Modo Cultivo Sugerido</div>
+              <div className="text-xs opacity-90">Recibe recomendaciones según tus condiciones</div>
+            </motion.button>
+
+            <motion.button
+              type="button"
+              onClick={startCamera}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex flex-col items-start gap-2 p-4 rounded-2xl bg-gradient-to-br from-indigo-600 to-indigo-500 text-white shadow-lg"
+            >
+              <div className="text-2xl">🔍</div>
+              <div className="text-sm font-semibold">Analizar con cámara (IA)</div>
+              <div className="text-xs opacity-90">Detecta madurez y condición de la planta</div>
+            </motion.button>
+
+            <motion.button
+              type="button"
+              onClick={() => setDarkMode(!darkMode)}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex flex-col items-start gap-2 p-4 rounded-2xl bg-gradient-to-br from-gray-700 to-gray-600 text-white shadow-lg"
+            >
+              <div className="text-2xl">{darkMode ? '☀️' : '🌙'}</div>
+              <div className="text-sm font-semibold">Cambiar tema</div>
+              <div className="text-xs opacity-90">Alterna modo claro/oscuro</div>
+            </motion.button>
+          </form>
+
+          {/* Panel de estadísticas/histórico simple */}
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-4xl">
+            {(() => {
+              const keys = Object.keys(cultivosDB || {});
+              const count = keys.length;
+              let phSum = 0, phCount = 0, tempSum = 0, tempCount = 0;
+              keys.forEach(k => {
+                const it = cultivosDB[k];
+                if (it && Array.isArray(it.ph) && it.ph.length === 2) {
+                  phSum += (Number(it.ph[0]) + Number(it.ph[1])) / 2;
+                  phCount++;
+                }
+                if (it && Array.isArray(it.temperatura) && it.temperatura.length === 2) {
+                  tempSum += (Number(it.temperatura[0]) + Number(it.temperatura[1])) / 2;
+                  tempCount++;
+                }
+              });
+              const avgPh = phCount ? (phSum / phCount).toFixed(1) : '-';
+              const avgTemp = tempCount ? (tempSum / tempCount).toFixed(1) : '-';
+
+              return [
+                <div key="c1" className="p-4 rounded-2xl bg-white dark:bg-gray-800 shadow text-center">
+                  <div className="text-sm text-gray-500">Cultivos en DB</div>
+                  <div className="text-2xl font-bold text-green-600">{count}</div>
+                </div>,
+                <div key="c2" className="p-4 rounded-2xl bg-white dark:bg-gray-800 shadow text-center">
+                  <div className="text-sm text-gray-500">pH medio ideal</div>
+                  <div className="text-2xl font-bold">{avgPh}</div>
+                </div>,
+                <div key="c3" className="p-4 rounded-2xl bg-white dark:bg-gray-800 shadow text-center">
+                  <div className="text-sm text-gray-500">Temp. media ideal (°C)</div>
+                  <div className="text-2xl font-bold">{avgTemp}</div>
                 </div>
-                <div>
-                  <h4 className="font-semibold">Resultado</h4>
-                  {analyzing ? <div className="text-sm">Analizando...</div> : (
-                    analysisResult ? (
-                      <div className="text-sm space-y-2">
-                        <div><strong>Veredicto:</strong> {analysisResult.verdict}</div>
-                        {analysisResult.estimateDays && <div><strong>Estimación:</strong> ~{analysisResult.estimateDays} días</div>}
-                        <div><strong>Color promedio:</strong> R {analysisResult.avg.r} G {analysisResult.avg.g} B {analysisResult.avg.b}</div>
-                        <div><strong>Proporción verde:</strong> {analysisResult.greenRatio}</div>
-                      </div>
-                    ) : <div className="text-sm text-gray-600">Captura una imagen y presiona Analizar.</div>
-                  )}
-                </div>
-              </div>
-            </div>
+              ];
+            })()}
           </div>
-        )}
+        </div>
       </div>
     );
   }
