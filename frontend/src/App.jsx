@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import InstallPromptIOS from './InstallPromptIOS';
 import logo from "./logo.png";
 import { motion } from "framer-motion";
 import { validarCultivo, sugerirCultivos, cultivos } from "./ServiciosCultivos";
@@ -729,6 +730,9 @@ function App() {
         <button onClick={startCamera} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">🔍 Analizar con cámara (IA)</button>
         <button onClick={() => setShowTelemetry(true)} className="ml-2 px-4 py-2 bg-gray-700 text-white rounded-lg">📡 Telemetría (POC)</button>
       </div>
+
+      {/* Install prompt (Android/iOS guidance) */}
+      <InstallPromptIOS />
 
       {/* Telemetry modal */}
       {showTelemetry && (
