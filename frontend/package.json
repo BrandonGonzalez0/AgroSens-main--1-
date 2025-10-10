@@ -19,7 +19,7 @@
     "vite-plugin-pwa": "^1.0.3"
   },
   "scripts": {
-    
+    "prebuild": "chmod -R 755 ./node_modules/.bin",
     "build": "vite build",
     "start": "vite",
     "preview": "vite preview"
