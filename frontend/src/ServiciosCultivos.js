@@ -170,3 +170,6 @@ export function sugerirCultivos(ph, humedad, temperatura) {
     );
   });
 }
+
+// Exportar la lista completa de cultivos para uso en la UI
+export { cultivos };
