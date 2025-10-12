@@ -2,9 +2,10 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import cors from 'cors';
+import { fileURLToPath } from 'url';
 
-// compute telemetry folder relative path
-const __filename = new URL(import.meta.url).pathname;
+// compute telemetry folder relative path in a cross-platform way
+const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DATA_FILE = path.join(__dirname, 'data.json');
@@ -55,6 +56,13 @@ app.get('/api/devices', (req, res) => {
   const byId = {};
   arr.forEach(r => { if (r.deviceId) byId[r.deviceId] = true; });
   return res.json({ devices: Object.keys(byId) });
+});
+
+// Health endpoint: basic status and last reading timestamp
+app.get('/api/health', (req, res) => {
+  const arr = readData();
+  const last = arr.length ? arr[arr.length - 1].timestamp : null;
+  return res.json({ ok: true, readings: arr.length, lastTimestamp: last, uptime: process.uptime() });
 });
 
 const PORT = process.env.PORT || 4001;

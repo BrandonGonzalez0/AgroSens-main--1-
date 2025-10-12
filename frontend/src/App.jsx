@@ -4,6 +4,7 @@ import logo from "./logo.png";
 import { motion } from "framer-motion";
 import { validarCultivo, sugerirCultivos, cultivos } from "./ServiciosCultivos";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import SuggestedCarousel from './SuggestedCarousel';
 import TelemetryDashboard from './TelemetryDashboard';
 import cultivosDB from "./data/cultivos.json";
 import { enqueueItem, getPendingItems, addReadingLocally } from './lib/offlineDB';
@@ -503,7 +504,7 @@ function App() {
               onClick={() => setModo('definido')}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className="flex flex-col items-start gap-2 p-4 rounded-2xl bg-gradient-to-br from-green-600 to-green-500 text-white shadow-lg"
+              className="flex flex-col items-start gap-2 p-4 rounded-2xl btn-primary shadow-lg"
             >
               <div className="text-2xl">🌱</div>
               <div className="text-sm font-semibold">Modo Cultivo Definido</div>
@@ -515,7 +516,7 @@ function App() {
               onClick={() => setModo('sugerido')}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className="flex flex-col items-start gap-2 p-4 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-lg"
+              className="flex flex-col items-start gap-2 p-4 rounded-2xl btn-primary shadow-lg"
             >
               <div className="text-2xl">🤝</div>
               <div className="text-sm font-semibold">Modo Cultivo Sugerido</div>
@@ -527,7 +528,7 @@ function App() {
               onClick={startCamera}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className="flex flex-col items-start gap-2 p-4 rounded-2xl bg-gradient-to-br from-indigo-600 to-indigo-500 text-white shadow-lg"
+              className="flex flex-col items-start gap-2 p-4 rounded-2xl btn-primary shadow-lg"
             >
               <div className="text-2xl">🔍</div>
               <div className="text-sm font-semibold">Analizar con cámara (IA)</div>
@@ -539,7 +540,7 @@ function App() {
               onClick={() => setDarkMode(!darkMode)}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className="flex flex-col items-start gap-2 p-4 rounded-2xl bg-gradient-to-br from-gray-700 to-gray-600 text-white shadow-lg"
+              className="flex flex-col items-start gap-2 p-4 rounded-2xl btn-primary shadow-lg"
             >
               <div className="text-2xl">{darkMode ? '☀️' : '🌙'}</div>
               <div className="text-sm font-semibold">Cambiar tema</div>
@@ -801,20 +802,11 @@ function App() {
                   <div className="text-sm text-gray-600 dark:text-gray-300">Resultados: {filteredSugerencias.length}</div>
                 </div>
 
-                {filteredSugerencias.length === 0 ? (
-                  <div className="p-4 rounded-xl bg-white dark:bg-gray-800 shadow">No se encontraron cultivos.</div>
-                ) : (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {filteredSugerencias.map((c) => (
-                      <CultivoCard
-                        key={c.nombre}
-                        cultivo={c}
-                        onClick={(it) => setSelectedCultivo(it)}
-                        selected={selectedCultivo && selectedCultivo.nombre === c.nombre}
-                      />
-                    ))}
-                  </div>
-                )}
+                <SuggestedCarousel
+                  suggestions={filteredSugerencias}
+                  selected={selectedCultivo}
+                  onSelect={(it) => setSelectedCultivo(it)}
+                />
               </div>
 
               <div className="md:col-span-1">

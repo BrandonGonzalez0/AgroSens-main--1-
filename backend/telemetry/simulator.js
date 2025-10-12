@@ -1,5 +1,16 @@
-// Use global fetch (Node 18+). If running an older Node without global fetch,
-// install `undici` and uncomment the import below: // import { fetch } from 'undici';
+// Ensure fetch is available (Node 18+ has global fetch). Fallback to undici if needed.
+let _fetch = global.fetch;
+try {
+  if (typeof _fetch !== 'function') {
+    // try to require undici dynamically
+    // eslint-disable-next-line global-require
+    const undici = await import('undici');
+    _fetch = undici.fetch;
+    console.log('Using undici.fetch as fetch polyfill');
+  }
+} catch (e) {
+  console.warn('Fetch not available and undici not installed. Please run `npm install undici` if using Node <18.');
+}
 
 const URL = process.env.INGEST_URL || 'http://localhost:4001/api/ingest';
 const DEVICE_ID = process.env.DEVICE_ID || 'sensor-001';
@@ -18,7 +29,8 @@ async function sendOne() {
   };
 
   try {
-    const res = await fetch(URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const executor = _fetch || fetch;
+    const res = await executor(URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const json = await res.json();
     console.log('Sent', json.entry);
   } catch (e) {

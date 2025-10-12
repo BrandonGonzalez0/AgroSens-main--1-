@@ -8,6 +8,18 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'robots.txt', 'logo.png'],
+      workbox: {
+        runtimeCaching: [
+          {
+            urlPattern: /\/api\/.*$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
+            }
+          }
+        ]
+      },
       manifest: {
         name: 'AgroSens',
         short_name: 'AgroSens',
