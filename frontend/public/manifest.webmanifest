@@ -6,6 +6,8 @@
   "background_color": "#ffffff",
   "theme_color": "#10B981",
   "icons": [
-    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml" }
+    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAAF0lEQVR4nO3BMQEAAADCoPVPbQ0PoAAAAAAAAAAA4GkG2AAE4qVGbAAAAAElFTkSuQmCC", "sizes": "192x192", "type": "image/png" },
+    { "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAAF0lEQVR4nO3BMQEAAADCoPVPbQ0PoAAAAAAAAAAA4GkG2AAE4qVGbAAAAAElFTkSuQmCC", "sizes": "512x512", "type": "image/png" }
   ]
 }
