@@ -279,6 +279,7 @@ function App() {
   // Reloj en tiempo real para la pantalla principal
   const [now, setNow] = useState(new Date());
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallManual, setShowInstallManual] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
@@ -320,6 +321,22 @@ function App() {
       window.removeEventListener('offline', onOffline);
     };
   }, []);
+
+  const onManualInstallClick = async () => {
+    if (deferredPrompt && typeof deferredPrompt.prompt === 'function') {
+      try {
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        console.log('PWA install choice', choice);
+      } catch (e) { console.warn('install prompt error', e); }
+      setDeferredPrompt(null);
+      // mark dismissed to avoid duplicate banners in InstallPromptIOS
+      localStorage.setItem('agrosens_install_dismissed', '1');
+    } else {
+      // show manual instructions modal
+      setShowInstallManual(true);
+    }
+  };
 
   // refresh pending count periodically
   useEffect(() => {
@@ -680,14 +697,11 @@ function App() {
           <div className="mt-1 flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
             <div>Elige cómo quieres trabajar hoy · <span className="font-medium">{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(now)}</span></div>
             <div className={`px-2 py-1 rounded text-xs ${isOnline ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{isOnline ? 'Online' : 'Offline'}</div>
-            {deferredPrompt && (
-              <button className="ml-2 px-2 py-1 bg-blue-600 text-white rounded text-xs" onClick={async () => {
-                deferredPrompt.prompt();
-                const choice = await deferredPrompt.userChoice;
-                setDeferredPrompt(null);
-                console.log('PWA install choice', choice);
-              }}>Instalar App</button>
-            )}
+            <div className="ml-2 flex items-center gap-2">
+              <button className="px-2 py-1 bg-blue-600 text-white rounded text-xs" onClick={onManualInstallClick}>Instalar App</button>
+              <div className="text-xs text-gray-600 dark:text-gray-300">{deferredPrompt ? 'Prompt listo' : 'Prompt no disponible'}</div>
+              <button className="ml-2 px-2 py-1 bg-gray-200 dark:bg-gray-700 text-xs rounded" onClick={() => { localStorage.removeItem('agrosens_install_dismissed'); alert('Marca de dismiss eliminada'); }}>Reset Dismiss</button>
+            </div>
             
           </div>
 

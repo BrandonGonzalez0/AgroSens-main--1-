@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'robots.txt', 'logo.png'],
+      includeAssets: ['favicon.svg', 'robots.txt', 'logo.png', 'logo.svg'],
       workbox: {
         runtimeCaching: [
           {
@@ -30,6 +30,7 @@ export default defineConfig({
         scope: '/',
         start_url: '/',
         icons: [
+          { src: 'logo.svg', sizes: 'any', type: 'image/svg+xml' },
           { src: 'logo.png', sizes: '192x192', type: 'image/png' },
           { src: 'logo.png', sizes: '512x512', type: 'image/png' }
         ]
