@@ -9,6 +9,7 @@ import TelemetryDashboard from './TelemetryDashboard';
 import cultivosDB from "./data/cultivos.json";
 import { enqueueItem, getPendingItems, addReadingLocally } from './lib/offlineDB';
 import { flushQueue } from './lib/sync';
+import WeatherRotator from './WeatherRotator';
 
 // Normaliza un nombre para buscar en cultivosDB (quita acentos, espacios y minúsculas)
 function normalizeKey(name) {
@@ -196,6 +197,7 @@ function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const workerRef = useRef(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [showTelemetry, setShowTelemetry] = useState(false);
@@ -208,6 +210,24 @@ function App() {
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  // crear worker de análisis (si el navegador lo soporta)
+  useEffect(() => {
+    try {
+      // Vite soporta new URL(import.meta.url)
+      const w = new Worker(new URL('./lib/analysisWorker.js', import.meta.url), { type: 'module' });
+      workerRef.current = w;
+    } catch (e) {
+      console.warn('Worker no disponible:', e);
+      workerRef.current = null;
+    }
+    return () => {
+      if (workerRef.current) {
+        try { workerRef.current.terminate(); } catch (e) {}
+        workerRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -308,67 +328,106 @@ function App() {
     if (!videoRef.current) return;
     setAnalyzing(true);
     const video = videoRef.current;
-    const w = video.videoWidth || 640;
-    const h = video.videoHeight || 480;
     const canvas = canvasRef.current;
-    canvas.width = w;
-    canvas.height = h;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, w, h);
-    const img = ctx.getImageData(0, 0, w, h);
-    const data = img.data;
+    const maxW = 640;
 
-    let rSum = 0, gSum = 0, bSum = 0, count = 0;
-    let plantPixels = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i], g = data[i+1], b = data[i+2];
-      rSum += r; gSum += g; bSum += b; count++;
-      // detect pixel verde/plant-like: green significantly higher than other channels
-      if (g > 80 && g > r + 15) plantPixels++;
+    const makeFrame = () => {
+      const w = Math.min(video.videoWidth || 640, maxW);
+      const aspect = (video.videoHeight || 480) / (video.videoWidth || 640);
+      const h = Math.round(w * aspect);
+      canvas.width = w; canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+      const img = ctx.getImageData(0, 0, w, h);
+      // copiar buffer para transferir al worker
+      const copy = new Uint8ClampedArray(img.data);
+      return { width: w, height: h, buffer: copy.buffer };
+    };
+
+    // capturar 3 frames con pequeño retardo
+    const frames = [];
+    for (let i = 0; i < 3; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, 80));
+      frames.push(makeFrame());
     }
-    const avgR = rSum / count;
-    const avgG = gSum / count;
-    const avgB = bSum / count;
-    const greenRatio = plantPixels / count; // proporción de píxeles que parecen planta
-    const redPortion = avgR / (avgR + avgG + avgB + 1e-6);
 
-    // regla por cultivo (si está seleccionado)
+    const processFrame = (frame, idx) => new Promise((resolve) => {
+      const wkr = workerRef.current;
+      const id = `${Date.now()}-${Math.random()}-${idx}`;
+      if (wkr) {
+        const handler = (ev) => {
+          if (ev.data && ev.data.id === id) {
+            wkr.removeEventListener('message', handler);
+            resolve(ev.data);
+          }
+        };
+        wkr.addEventListener('message', handler);
+        try {
+          wkr.postMessage({ id, width: frame.width, height: frame.height, buffer: frame.buffer }, [frame.buffer]);
+        } catch (e) {
+          // fallback si transfer falla
+          wkr.removeEventListener('message', handler);
+          resolve({ id, error: String(e) });
+        }
+      } else {
+        // fallback: procesar en hilo principal (simple)
+        try {
+          const arr = new Uint8ClampedArray(frame.buffer);
+          let rSum = 0, gSum = 0, bSum = 0, count = 0, plantPixels = 0, redPixels = 0;
+          for (let i = 0; i < arr.length; i += 4) {
+            const r = arr[i] / 255, g = arr[i+1] / 255, b = arr[i+2] / 255;
+            rSum += arr[i]; gSum += arr[i+1]; bSum += arr[i+2]; count++;
+            const max = Math.max(r, g, b); const min = Math.min(r, g, b); const delta = max - min;
+            let h = 0;
+            if (delta !== 0) {
+              if (max === r) h = ((g - b) / delta) % 6;
+              else if (max === g) h = (b - r) / delta + 2;
+              else h = (r - g) / delta + 4;
+              h = Math.round(h * 60); if (h < 0) h += 360;
+            }
+            const s = max === 0 ? 0 : delta / max; const v = max;
+            if (h >= 70 && h <= 160 && s > 0.2 && v > 0.05) plantPixels++;
+            if ((h <= 15 || h >= 345) && s > 0.35 && v > 0.15) redPixels++;
+          }
+          resolve({ id, rSum, gSum, bSum, count, plantPixels, redPixels });
+        } catch (err) { resolve({ id, error: String(err) }); }
+      }
+    });
+
+    const results = [];
+    for (let i = 0; i < frames.length; i++) {
+      results.push(await processFrame(frames[i], i));
+    }
+
+    // combinar resultados
+    let rSum = 0, gSum = 0, bSum = 0, count = 0, plantPixels = 0, redPixels = 0;
+    for (const res of results) {
+      if (res.error) continue;
+      rSum += res.rSum || 0; gSum += res.gSum || 0; bSum += res.bSum || 0; count += res.count || 0;
+      plantPixels += res.plantPixels || 0; redPixels += res.redPixels || 0;
+    }
+    const avgR = count ? (rSum / count) : 0;
+    const avgG = count ? (gSum / count) : 0;
+    const avgB = count ? (bSum / count) : 0;
+    const greenRatio = count ? (plantPixels / count) : 0;
+    const redPortion = (avgR + avgG + avgB) ? (avgR / (avgR + avgG + avgB)) : 0;
+
+    // aplicar reglas existentes
     const key = normalizeKey(cultivo || '');
     let verdict = 'Insuficiente información';
     let estimateDays = null;
-
     if (key.includes('tomate') || key.includes('tomato')) {
-      // tomate: más rojo => más maduro
       if (redPortion > 0.35) verdict = 'Maduro';
-      else {
-        verdict = 'No maduro';
-        estimateDays = Math.max(1, Math.round((0.35 - redPortion) * 60));
-      }
+      else { verdict = 'No maduro'; estimateDays = Math.max(1, Math.round((0.35 - redPortion) * 60)); }
     } else if (key.includes('palta') || key.includes('aguacate') || key.includes('avocado')) {
-      // palta: usamos tamaño relativo y color verde oscuro como proxy
       if (greenRatio > 0.02 && avgG < 120) verdict = 'Probablemente madura';
-      else {
-        verdict = 'Necesita más crecimiento/maduración';
-        estimateDays = Math.max(2, Math.round((0.02 - greenRatio) * 200));
-      }
+      else { verdict = 'Necesita más crecimiento/maduración'; estimateDays = Math.max(2, Math.round((0.02 - greenRatio) * 200)); }
     } else {
-      // regla genérica: tamaño relativo indica crecimiento; color verde madura para hojas
       if (greenRatio > 0.02) verdict = 'Planta con buen desarrollo';
-      else {
-        verdict = 'Planta pequeña o fondo dominante';
-        estimateDays = Math.max(3, Math.round((0.02 - greenRatio) * 150));
-      }
+      else { verdict = 'Planta pequeña o fondo dominante'; estimateDays = Math.max(3, Math.round((0.02 - greenRatio) * 150)); }
     }
 
-    const result = {
-      avg: { r: Math.round(avgR), g: Math.round(avgG), b: Math.round(avgB) },
-      greenRatio: Number(greenRatio.toFixed(4)),
-      redPortion: Number(redPortion.toFixed(4)),
-      verdict,
-      estimateDays,
-      timestamp: Date.now()
-    };
-
+    const result = { avg: { r: Math.round(avgR), g: Math.round(avgG), b: Math.round(avgB) }, greenRatio: Number(greenRatio.toFixed(4)), redPortion: Number(redPortion.toFixed(4)), verdict, estimateDays, timestamp: Date.now() };
     setAnalysisResult(result);
     setAnalyzing(false);
   };
@@ -550,40 +609,60 @@ function App() {
 
           {/* Panel de estadísticas/histórico simple */}
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-4xl">
-            {(() => {
-              const keys = Object.keys(cultivosDB || {});
-              const count = keys.length;
-              let phSum = 0, phCount = 0, tempSum = 0, tempCount = 0;
-              keys.forEach(k => {
-                const it = cultivosDB[k];
-                if (it && Array.isArray(it.ph) && it.ph.length === 2) {
-                  phSum += (Number(it.ph[0]) + Number(it.ph[1])) / 2;
-                  phCount++;
-                }
-                if (it && Array.isArray(it.temperatura) && it.temperatura.length === 2) {
-                  tempSum += (Number(it.temperatura[0]) + Number(it.temperatura[1])) / 2;
-                  tempCount++;
-                }
-              });
-              const avgPh = phCount ? (phSum / phCount).toFixed(1) : '-';
-              const avgTemp = tempCount ? (tempSum / tempCount).toFixed(1) : '-';
-
-              return [
-                <div key="c1" className="p-4 rounded-2xl bg-white dark:bg-gray-800 shadow text-center">
-                  <div className="text-sm text-gray-500">Cultivos en DB</div>
-                  <div className="text-2xl font-bold text-green-600">{count}</div>
-                </div>,
-                <div key="c2" className="p-4 rounded-2xl bg-white dark:bg-gray-800 shadow text-center">
-                  <div className="text-sm text-gray-500">pH medio ideal</div>
-                  <div className="text-2xl font-bold">{avgPh}</div>
-                </div>,
-                <div key="c3" className="p-4 rounded-2xl bg-white dark:bg-gray-800 shadow text-center">
-                  <div className="text-sm text-gray-500">Temp. media ideal (°C)</div>
-                  <div className="text-2xl font-bold">{avgTemp}</div>
-                </div>
-              ];
-            })()}
+            <WeatherRotator />
           </div>
+
+      {/* Telemetry modal (también accesible desde la pantalla de selección) */}
+      {showTelemetry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 w-[95%] max-w-4xl">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold">Telemetry POC</h3>
+              <div className="flex gap-2">
+                  <button onClick={() => setShowTelemetry(false)} className="px-3 py-1 bg-gray-300 dark:bg-gray-700 rounded">Cerrar</button>
+                  <button onClick={async () => { const res = await flushQueue(); console.log('Flush results', res); }} className="px-3 py-1 bg-green-600 text-white rounded">Sincronizar ahora</button>
+              </div>
+            </div>
+            <TelemetryDashboard deviceId="sensor-001" />
+          </div>
+        </div>
+      )}
+
+      {/* Modal de cámara (también accesible desde la pantalla de selección) */}
+      {cameraOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 w-[90%] max-w-3xl">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold">Análisis por cámara</h3>
+              <div className="flex gap-2">
+                <button onClick={() => { captureAndAnalyze(); }} className="px-3 py-1 bg-green-600 text-white rounded">Analizar</button>
+                <button onClick={stopCamera} className="px-3 py-1 bg-gray-300 dark:bg-gray-700 rounded">Cerrar</button>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <video ref={videoRef} className="w-full rounded" playsInline muted />
+                <canvas ref={canvasRef} className="hidden" />
+              </div>
+              <div>
+                <h4 className="font-semibold">Resultado</h4>
+                {analyzing ? <div className="text-sm">Analizando...</div> : (
+                  analysisResult ? (
+                    <div className="text-sm space-y-2">
+                      <div><strong>Veredicto:</strong> {analysisResult.verdict}</div>
+                      {analysisResult.estimateDays && <div><strong>Estimación:</strong> ~{analysisResult.estimateDays} días</div>}
+                      <div><strong>Color promedio:</strong> R {analysisResult.avg.r} G {analysisResult.avg.g} B {analysisResult.avg.b}</div>
+                      <div><strong>Proporción verde:</strong> {analysisResult.greenRatio}</div>
+                    </div>
+                  ) : <div className="text-sm text-gray-600">Captura una imagen y presiona Analizar.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
         </div>
       </div>
     );
