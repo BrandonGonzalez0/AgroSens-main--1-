@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 
 export default function SuggestedCarousel({ suggestions = [], selected, onSelect }) {
   const containerRef = useRef(null);
+  const [showAll, setShowAll] = useState(false);
 
   const scrollBy = (offset) => {
     const el = containerRef.current;
@@ -13,8 +14,11 @@ export default function SuggestedCarousel({ suggestions = [], selected, onSelect
     return <div className="p-4 rounded-xl bg-white dark:bg-gray-800 shadow">No hay sugerencias.</div>;
   }
 
+  const visible = suggestions.slice(0, 3);
+
   return (
-    <div className="relative">
+    <>
+      <div className="relative">
       <button
         onClick={() => scrollBy(-300)}
         aria-label="Anterior"
@@ -22,7 +26,7 @@ export default function SuggestedCarousel({ suggestions = [], selected, onSelect
       >◀</button>
 
       <div ref={containerRef} className="flex gap-4 overflow-x-auto no-scrollbar py-2 px-8">
-        {suggestions.map((c) => (
+        {visible.map((c) => (
           <button
             key={c.nombre}
             onClick={() => onSelect(c)}
@@ -39,6 +43,14 @@ export default function SuggestedCarousel({ suggestions = [], selected, onSelect
             </div>
           </button>
         ))}
+        {suggestions.length > 3 && (
+          <button onClick={() => setShowAll(true)} className="flex-shrink-0 w-64 md:w-72 lg:w-80 flex items-center justify-center bg-white/90 dark:bg-gray-800/90 rounded-2xl shadow p-3 border-2 border-dashed">
+            <div className="text-center">
+              <div className="text-2xl font-bold">+{suggestions.length - 3}</div>
+              <div className="text-sm text-gray-600">más</div>
+            </div>
+          </button>
+        )}
       </div>
 
       <button
@@ -46,6 +58,37 @@ export default function SuggestedCarousel({ suggestions = [], selected, onSelect
         aria-label="Siguiente"
         className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-white/80 dark:bg-gray-800/80 p-2 rounded-full shadow"
       >▶</button>
-    </div>
+      </div>
+
+      {showAll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 w-[95%] max-w-2xl">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold">Todas las sugerencias</h3>
+              <button onClick={() => setShowAll(false)} className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded">Cerrar</button>
+            </div>
+            <div className="grid gap-3">
+              {suggestions.map((c) => (
+                <button key={c.nombre} onClick={() => { setShowAll(false); onSelect(c); }} className="text-left p-3 rounded-lg bg-white dark:bg-gray-800 shadow">
+                  <div className="flex items-center gap-3">
+                    <div className="w-14 h-14 rounded overflow-hidden bg-gray-100 dark:bg-gray-700">
+                      <img src={c.imagen} alt={c.nombre} className="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                      <div className="font-semibold">{c.nombre}</div>
+                      <div className="text-xs text-gray-500">pH: {Array.isArray(c.ph) ? `${c.ph[0]} - ${c.ph[1]}` : c.ph} · Humedad: {Array.isArray(c.humedad) ? `${c.humedad[0]} - ${c.humedad[1]}` : c.humedad}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
+
+// Modal rendering (inline) - placed outside main component return for clarity
+
+
