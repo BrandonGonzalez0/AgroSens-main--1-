@@ -691,7 +691,7 @@ function App() {
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.8, ease: 'easeOut' }}
           >
-            AgroSens — Herramientas para tu cultivo
+            AgroSens — Herramienta de control y gestión para tus cultivos
           </motion.h1>
 
           <div className="mt-1 flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
