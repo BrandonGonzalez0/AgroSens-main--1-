@@ -7,12 +7,9 @@ function SuggestedCultivos({ resultado }) {
       {resultado.sugerencias.map((cultivo) => (
         <CultivoCard
           key={cultivo.nombre}
-          nombre={cultivo.nombre}
-          ph={cultivo.ph}
-          humedad={cultivo.humedad}
-          temperatura={cultivo.temperatura}
-          imagen={cultivo.imagen}
-          recomendacion="Este cultivo es recomendable para tus condiciones actuales."
+          cultivo={cultivo}
+          onClick={() => {}}
+          selected={false}
         />
       ))}
     </div>

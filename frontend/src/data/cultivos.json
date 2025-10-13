@@ -1,17 +1,112 @@
 {
   "tomate": {
+    "nombre": "Tomate",
     "ph": [6, 7],
     "humedad": [60, 80],
-    "temperatura": [18, 28]
+    "temperatura": [18, 28],
+    "imagen": "https://images.unsplash.com/photo-1601004890684-d8cbf643f5f2?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=2c6b7a7b7f3e9f41f1c2b6c4f0d5b9c8",
+    "icon": "🍅",
+    "siembra": [
+      "Selecciona un lugar con 6-8 horas de sol directo y suelo bien drenado.",
+      "Prepara el suelo eliminando maleza y mezclando 3-4 cm de compost maduro por cada 10 cm de capa superior.",
+      "Siembra en semillero o directamente: usa 2-3 semillas por hoyo a 1-2 cm de profundidad, separadas 40-60 cm entre plantas.",
+      "Al trasplantar (si usaste semillero) deja 40-60 cm entre filas y riega inmediatamente para asentar raíces.",
+      "Realiza riegos frecuentes y superficiales (mantener humedad sin encharcar) y aporcar para favorecer raíces.",
+      "Fertiliza con NPK equilibrado a las 3-4 semanas y aplica control de plagas preventivo (ojo con pulgones y mosca blanca).",
+      "Cosecha cuando los frutos tengan color y firmeza adecuados; revisa diariamente en fases de madurez rápida."
+    ]
   },
   "maiz": {
+    "nombre": "Maíz",
     "ph": [5.5, 7.5],
     "humedad": [50, 70],
-    "temperatura": [20, 30]
+    "temperatura": [20, 30],
+    "imagen": "https://images.unsplash.com/photo-1506806732259-39c2d0268443?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=0f6f3f0d1e0c2b4a6a9c3b2d4a5e6f7a",
+    "icon": "🌽",
+    "siembra": [
+      "Elige una parcela con buena exposición solar y suelo suelto; evita zonas encharcadas.",
+      "Labra superficialmente y incorpora materia orgánica (compost) 2-3 semanas antes de la siembra.",
+      "Siembra las semillas a 3-5 cm de profundidad y a 20-30 cm entre plantas en hileras separadas 70-90 cm.",
+      "Riega tras la siembra y mantén humedad durante la emergencia, reduciendo riegos una vez establecidas.",
+      "Fertiliza en 2 aplicaciones: a los 20-30 días y al inicio de espigado con un fertilizante rico en nitrógeno.",
+      "Realiza control de malezas temprano y evita competencia; protege de aves si es necesario."
+    ]
   },
   "palta": {
+    "nombre": "Palta",
     "ph": [6, 7.5],
     "humedad": [55, 75],
-    "temperatura": [15, 25]
+    "temperatura": [15, 25],
+    "imagen": "https://images.unsplash.com/photo-1567306226416-28f0efdc88ce?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p",
+    "icon": "🥑",
+    "siembra": [
+      "Prepara hoyos amplios (al menos 60x60x60 cm) y mezcla la tierra removida con compost bien descompuesto.",
+      "Coloca el plantín cuidando que el cuello de la raíz quede al nivel del suelo y no demasiado profundo.",
+      "Riega abundantemente después del trasplante y aplica mulch para conservar humedad y reducir malezas.",
+      "Evita riegos superficiales frecuentes; riega profundamente y con menos frecuencia para promover raíces profundas.",
+      "Protégete de heladas en los primeros años y fertiliza con sulfato de magnesio y nitrógeno en temporadas de crecimiento.",
+      "Realiza podas de formación los primeros 2-3 años para una estructura de copa adecuada."
+    ]
+  },
+  "lechuga": {
+    "nombre": "Lechuga",
+    "ph": [6, 7],
+    "humedad": [65, 85],
+    "temperatura": [10, 24],
+    "imagen": "https://images.unsplash.com/photo-1506804883867-7b2a0d9f7f7a?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=3b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e",
+    "icon": "🥬",
+    "siembra": [
+      "Siembra en suelo ligero, bien drenado o en camas elevadas si hay exceso de humedad.",
+      "Puedes sembrar en líneas o en semillero; siembra superficial (0.5-1 cm) y cubre ligeramente.",
+      "Mantén riego regular para evitar pardeamiento o espigado; la lechuga requiere humedad constante.",
+      "Realiza trasplante si usas semillero cuando tengan 3-4 hojas verdaderas, separando 20-30 cm entre plantas.",
+      "Fertiliza con compost o una fórmula equilibrada baja en nitrógeno justo antes del trasplante.",
+      "Cosecha hoja a hoja (variedades de hoja) o corta la cabeza cuando esté firme según la variedad."
+    ]
+  },
+  "papaya": {
+    "nombre": "Papaya",
+    "ph": [5.5, 7],
+    "humedad": [60, 80],
+    "temperatura": [22, 32],
+    "imagen": "https://images.unsplash.com/photo-1588731247206-9a1c5f3a3b7b?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=4c3b2a1d0e9f8a7b6c5d4e3f2a1b0c9d",
+    "icon": "🥭",
+    "siembra": [
+      "Selecciona un sitio protegido del viento con buena exposición solar y suelo rico en materia orgánica.",
+      "Siembra directamente semillas en hoyos o usa plántulas; cubre ligeramente y riega para mantener humedad.",
+      "Mantén riego regular y evita encharcamientos; la papaya necesita buena disponibilidad de agua en crecimiento.",
+      "Aplica poda ligera para eliminar brotes laterales no deseados y favorecer un solo tronco principal.",
+      "Fertiliza con mayor contenido de potasio durante la etapa de fructificación para mejorar calidad del fruto."
+    ]
+  },
+  "uvas": {
+    "nombre": "Uvas",
+    "ph": [6, 7.5],
+    "humedad": [50, 70],
+    "temperatura": [15, 28],
+    "imagen": "https://images.unsplash.com/photo-1567306226416-2f6a7e9b3c4a?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=5d4c3b2a1f0e9d8c7b6a5e4d3c2b1a0f",
+    "icon": "🍇",
+    "siembra": [
+      "Planta en un sitio con excelente sol y buen drenaje; evita suelos pesados y mal drenados.",
+      "Prepara el terreno con enmiendas orgánicas y asegura un patrón de soporte (enrejado) antes de plantar.",
+      "Siembra al inicio de la temporada de crecimiento y respeta distancias de 1.5-2.5 m entre plantas según variedad.",
+      "Riega con moderación y establece un programa de fertilización según análisis de suelo.",
+      "Realiza podas de formación y producción anuales; controla plagas y enfermedades fúngicas durante la temporada."
+    ]
+  },
+  "olivo": {
+    "nombre": "Olivo",
+    "ph": [6, 8],
+    "humedad": [40, 60],
+    "temperatura": [10, 30],
+    "imagen": "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3&s=6e5f4d3c2b1a0f9e8d7c6b5a4f3e2d1c",
+    "icon": "🫒",
+    "siembra": [
+      "Elige un suelo calizo o neutro y un lugar con buena exposición al sol; los olivares toleran sequía relativa.",
+      "Cava hoyos amplios y añade compost; planta con cuidado, sin enterrar el cuello del árbol.",
+      "Riega regularmente el primer año para establecer raíces, luego reduce frecuencia para fomentar resistencia.",
+      "Realiza podas de formación los primeros años y poda de producción anual para ventilar la copa.",
+      "Controla plagas como la mosca del olivo y aplica tratamientos fitosanitarios recomendados solo cuando sea necesario."
+    ]
   }
 }

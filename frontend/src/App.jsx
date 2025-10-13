@@ -127,11 +127,62 @@ function DetallePanel({ item, onClose, currentPh, currentHum, currentTemp }) {
   };
 
   const onToggleRec = (id) => {
-    setRecs((prev) => prev.map(r => r.id === id ? { ...r, done: !r.done } : r));
+    setRecs((prev) => {
+      const updated = prev.map(r => r.id === id ? { ...r, done: !r.done } : r);
+      try {
+        const key = `recsProgress:${normalizeKey(item.nombre)}`;
+        localStorage.setItem(key, JSON.stringify(updated));
+      } catch (e) {
+        console.warn('No se pudo guardar progreso en localStorage', e);
+      }
+      return updated;
+    });
   };
 
   const onShowRecs = () => {
+    // Si la DB del cultivo tiene pasos de siembra, usarlos como recomendaciones seleccionables
+    try {
+      const db = cultivosDB[item.nombre.toLowerCase()];
+      if (db && Array.isArray(db.siembra) && db.siembra.length > 0) {
+        const built = db.siembra.map((text, i) => ({ id: `siembra-${i}`, text, done: false }));
+        // intentar restaurar progreso desde localStorage
+        try {
+          const key = `recsProgress:${normalizeKey(item.nombre)}`;
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            // merge by id
+            for (const b of built) {
+              const found = parsed.find(p => p.id === b.id);
+              if (found) b.done = !!found.done;
+            }
+          }
+        } catch (e) {
+          // ignore restore errors
+        }
+        setRecs(built);
+        setShowRecs(true);
+        return;
+      }
+    } catch (e) {
+      // ignore and fall back
+    }
+
     const built = buildRecommendations();
+    // intentar restaurar progreso para recomendaciones generadas
+    try {
+      const key = `recsProgress:${normalizeKey(item.nombre)}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        for (const b of built) {
+          const found = parsed.find(p => p.id === b.id);
+          if (found) b.done = !!found.done;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
     setRecs(built);
     setShowRecs(true);
   };
@@ -172,6 +223,24 @@ function DetallePanel({ item, onClose, currentPh, currentHum, currentTemp }) {
         </div>
       )}
 
+      {/* Pasos de siembra (estáticos) sólo cuando no se muestran las recomendaciones seleccionables */}
+      {!showRecs && item && item.nombre && (() => {
+        const db = cultivosDB[item.nombre.toLowerCase()];
+        if (db && Array.isArray(db.siembra) && db.siembra.length > 0) {
+          return (
+            <div className="mt-4">
+              <h4 className="font-semibold mb-2">Paso a paso para sembrar {item.nombre}</h4>
+              <ol className="list-decimal list-inside text-sm space-y-2 text-gray-700 dark:text-gray-300">
+                {db.siembra.map((p, i) => (
+                  <li key={i}>{p}</li>
+                ))}
+              </ol>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
       {/* Nota: el gráfico comparativo se muestra únicamente en el modo 'definido' al validar un cultivo. */}
       <div className="mt-4">
         <p className="text-sm text-gray-500">El gráfico comparativo (Actual vs Ideal) se muestra en el panel de validación cuando trabajas en el modo <strong>Definido</strong>.</p>
@@ -200,6 +269,11 @@ function App() {
   const workerRef = useRef(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [heatmapEnabled, setHeatmapEnabled] = useState(false);
+  const heatmapCanvasRef = useRef(null);
+  const [dangerAlert, setDangerAlert] = useState(null);
+  const [mlEnabled, setMlEnabled] = useState(false);
+  const [mlPredictions, setMlPredictions] = useState(null);
   const [showTelemetry, setShowTelemetry] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   // Reloj en tiempo real para la pantalla principal
@@ -363,7 +437,15 @@ function App() {
         };
         wkr.addEventListener('message', handler);
         try {
-          wkr.postMessage({ id, width: frame.width, height: frame.height, buffer: frame.buffer }, [frame.buffer]);
+          // decide mode: prefer ML if enabled, otherwise heatmap if enabled, else default
+          if (mlEnabled) {
+            wkr.postMessage({ id, width: frame.width, height: frame.height, buffer: frame.buffer, mode: 'ml' }, [frame.buffer]);
+          } else if (heatmapEnabled) {
+            const gridW = 40; const gridH = Math.max(8, Math.round((gridW * frame.height) / frame.width));
+            wkr.postMessage({ id, width: frame.width, height: frame.height, buffer: frame.buffer, mode: 'heatmap', gridW, gridH }, [frame.buffer]);
+          } else {
+            wkr.postMessage({ id, width: frame.width, height: frame.height, buffer: frame.buffer }, [frame.buffer]);
+          }
         } catch (e) {
           // fallback si transfer falla
           wkr.removeEventListener('message', handler);
@@ -429,7 +511,60 @@ function App() {
 
     const result = { avg: { r: Math.round(avgR), g: Math.round(avgG), b: Math.round(avgB) }, greenRatio: Number(greenRatio.toFixed(4)), redPortion: Number(redPortion.toFixed(4)), verdict, estimateDays, timestamp: Date.now() };
     setAnalysisResult(result);
+    // If heatmapEnabled and any worker returned a heatmap, draw it and check for danger
+    // process worker results for heatmap or ML
+    for (const res of results) {
+      if (!res) continue;
+      if (res.heatmap && res.gridW && res.gridH) {
+        try {
+          const floats = new Float32Array(res.heatmap);
+          drawHeatmapOnOverlay(floats, res.gridW, res.gridH);
+          let maxV = 0; for (let i = 0; i < floats.length; i++) if (floats[i] > maxV) maxV = floats[i];
+          if (maxV > 0.6) setDangerAlert('Peligro detectado: posible presencia de insectos/plagas en la zona analizada.');
+          else setDangerAlert(null);
+        } catch (e) { console.warn('Error procesando heatmap', e); }
+      }
+
+      if (res.ml && res.predictions) {
+        setMlPredictions(res.predictions);
+        // heurística simple: si alguna clase contiene palabras sospechosas -> alerta
+        const suspicious = ['insect', 'bug', 'fly', 'ant', 'aphid', 'beetle', 'weevil', 'caterpillar'];
+        const found = res.predictions.find(p => suspicious.some(s => p.className.toLowerCase().includes(s)) && p.probability > 0.15);
+        if (found) setDangerAlert(`Peligro detectado por ML: ${found.className} (${(found.probability*100).toFixed(1)}%)`);
+        else {
+          // if ML says no insect, clear only if no heatmap indicates danger
+          if (!dangerAlert) setDangerAlert(null);
+        }
+      }
+      if (res.error) console.warn('Worker error:', res.error);
+    }
     setAnalyzing(false);
+  };
+
+  // dibuja el heatmap sobre el canvas overlay
+  const drawHeatmapOnOverlay = (grid, gridW, gridH) => {
+    const canvas = heatmapCanvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+    const ctx = canvas.getContext('2d');
+    const w = video.clientWidth || video.videoWidth;
+    const h = video.clientHeight || video.videoHeight;
+    canvas.width = w; canvas.height = h;
+    ctx.clearRect(0,0,w,h);
+    // each cell size
+    const cellW = w / gridW; const cellH = h / gridH;
+    for (let gy = 0; gy < gridH; gy++) {
+      for (let gx = 0; gx < gridW; gx++) {
+        const v = grid[gy * gridW + gx];
+        if (v <= 0) continue;
+        // colormap: from transparent -> yellow -> red
+        const alpha = Math.min(0.8, v * 0.9 + 0.1);
+        let color = `rgba(255,0,0,${alpha})`;
+        if (v < 0.4) color = `rgba(255,230,0,${alpha})`;
+        ctx.fillStyle = color;
+        ctx.fillRect(gx * cellW, gy * cellH, Math.ceil(cellW)+1, Math.ceil(cellH)+1);
+      }
+    }
   };
 
   const handleValidar = () => {
@@ -553,7 +688,7 @@ function App() {
                 console.log('PWA install choice', choice);
               }}>Instalar App</button>
             )}
-            <div className="ml-4 text-sm">Pendientes: <span className="font-medium">{pendingCount}</span></div>
+            
           </div>
 
           {/* Form creativo con los 4 botones principales */}
@@ -642,11 +777,35 @@ function App() {
 
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <video ref={videoRef} className="w-full rounded" playsInline muted />
+                <div className="relative">
+                  <video ref={videoRef} className="w-full rounded" playsInline muted />
+                  <canvas ref={heatmapCanvasRef} className="pointer-events-none absolute inset-0 w-full h-full" />
+                </div>
                 <canvas ref={canvasRef} className="hidden" />
               </div>
               <div>
                 <h4 className="font-semibold">Resultado</h4>
+                        <div className="mt-2 space-y-2">
+                          <label className="inline-flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={heatmapEnabled} onChange={(e) => setHeatmapEnabled(e.target.checked)} />
+                            <span>Mostrar mapa de calor (detección de plagas)</span>
+                          </label>
+                          <label className="inline-flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={mlEnabled} onChange={(e) => setMlEnabled(e.target.checked)} />
+                            <span>Activar detección por ML (mobilenet)</span>
+                          </label>
+                          {dangerAlert && <div className="mt-2 text-sm text-red-600 font-semibold">⚠️ {dangerAlert}</div>}
+                          {mlPredictions && (
+                            <div className="mt-2 text-sm">
+                              <div className="font-semibold">Predicciones (ML):</div>
+                              <ul className="list-disc pl-5 text-sm">
+                                {mlPredictions.map((p, i) => (
+                                  <li key={i}>{p.className} — {(p.probability * 100).toFixed(1)}%</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
                 {analyzing ? <div className="text-sm">Analizando...</div> : (
                   analysisResult ? (
                     <div className="text-sm space-y-2">
