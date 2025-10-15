@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { float32ToBase64 } from './lib/heatmapUtils';
 import InstallPromptIOS from './InstallPromptIOS';
 import logo from "./logo.png";
 import { motion } from "framer-motion";
@@ -274,8 +275,13 @@ function App() {
   const [dangerAlert, setDangerAlert] = useState(null);
   const [mlEnabled, setMlEnabled] = useState(false);
   const [mlPredictions, setMlPredictions] = useState(null);
+  const [customModelUrl, setCustomModelUrl] = useState('');
+  const lastHeatmapRef = useRef(null);
+  const [autoSendAnalysis, setAutoSendAnalysis] = useState(false);
   const [showTelemetry, setShowTelemetry] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [showAnalisisModal, setShowAnalisisModal] = useState(false);
+  const [analisisList, setAnalisisList] = useState([]);
   // Reloj en tiempo real para la pantalla principal
   const [now, setNow] = useState(new Date());
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -285,6 +291,15 @@ function App() {
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('agrosens_custom_model');
+      if (saved) setCustomModelUrl(saved);
+      const savedAuto = localStorage.getItem('agrosens_auto_send');
+      if (savedAuto) setAutoSendAnalysis(savedAuto === '1');
+    } catch (e) {}
   }, []);
 
   // crear worker de análisis (si el navegador lo soporta)
@@ -456,7 +471,7 @@ function App() {
         try {
           // decide mode: prefer ML if enabled, otherwise heatmap if enabled, else default
           if (mlEnabled) {
-            wkr.postMessage({ id, width: frame.width, height: frame.height, buffer: frame.buffer, mode: 'ml' }, [frame.buffer]);
+            wkr.postMessage({ id, width: frame.width, height: frame.height, buffer: frame.buffer, mode: 'ml', customModelUrl }, [frame.buffer]);
           } else if (heatmapEnabled) {
             const gridW = 40; const gridH = Math.max(8, Math.round((gridW * frame.height) / frame.width));
             wkr.postMessage({ id, width: frame.width, height: frame.height, buffer: frame.buffer, mode: 'heatmap', gridW, gridH }, [frame.buffer]);
@@ -528,6 +543,36 @@ function App() {
 
     const result = { avg: { r: Math.round(avgR), g: Math.round(avgG), b: Math.round(avgB) }, greenRatio: Number(greenRatio.toFixed(4)), redPortion: Number(redPortion.toFixed(4)), verdict, estimateDays, timestamp: Date.now() };
     setAnalysisResult(result);
+    // Auto-send analysis if enabled
+    if (autoSendAnalysis && navigator.onLine) {
+      try {
+        // capture thumbnail from canvas
+        let thumb = null;
+        try {
+          if (canvasRef.current) {
+            thumb = canvasRef.current.toDataURL('image/jpeg', 0.8).replace(/^data:image\/[a-z]+;base64,/, '');
+          }
+        } catch (e) { console.warn('No thumbnail', e); }
+
+        const payload = {
+          deviceId: 'cam-01',
+          cultivo: cultivo || null,
+          verdict: result.verdict,
+          estimateDays: result.estimateDays,
+          avgColor: result.avg,
+          greenRatio: result.greenRatio,
+          redPortion: result.redPortion,
+          bboxArea: result.bboxArea || null,
+          areaRatio: result.areaRatio || null,
+          mlPredictions: mlPredictions || null,
+          heatmap: lastHeatmapRef.current || null,
+          image: thumb || null,
+          raw: { timestamp: Date.now() }
+        };
+        fetch('/api/analisis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+          .then(r => r.json()).then(j => console.log('analisis guardado', j)).catch(e => console.warn('Error enviando analisis', e));
+      } catch (e) { console.warn('Error auto-send', e); }
+    }
     // If heatmapEnabled and any worker returned a heatmap, draw it and check for danger
     // process worker results for heatmap or ML
     for (const res of results) {
@@ -582,6 +627,10 @@ function App() {
         ctx.fillRect(gx * cellW, gy * cellH, Math.ceil(cellW)+1, Math.ceil(cellH)+1);
       }
     }
+    try {
+      // store base64 for sending later
+      lastHeatmapRef.current = float32ToBase64(grid);
+    } catch (e) { console.warn('Error encoding heatmap', e); }
   };
 
   const handleValidar = () => {
@@ -819,6 +868,17 @@ function App() {
                               </ul>
                             </div>
                           )}
+                          <div className="mt-3">
+                            <label className="text-sm">Modelo custom (opcional):</label>
+                            <div className="flex gap-2 mt-1">
+                              <input value={customModelUrl} onChange={(e) => setCustomModelUrl(e.target.value)} placeholder="https://.../model.json" className="flex-1 p-2 rounded border text-sm" />
+                              <button onClick={() => { localStorage.setItem('agrosens_custom_model', customModelUrl); alert('URL guardada en localStorage'); }} className="px-2 py-1 bg-blue-600 text-white rounded text-sm">Guardar</button>
+                            </div>
+                            <label className="inline-flex items-center gap-2 text-sm mt-2">
+                              <input type="checkbox" checked={autoSendAnalysis} onChange={(e) => { setAutoSendAnalysis(e.target.checked); localStorage.setItem('agrosens_auto_send', e.target.checked ? '1' : '0'); }} />
+                              <span>Enviar análisis automáticamente al backend</span>
+                            </label>
+                          </div>
                         </div>
                 {analyzing ? <div className="text-sm">Analizando...</div> : (
                   analysisResult ? (
@@ -982,6 +1042,7 @@ function App() {
       <div className="mt-4">
         <button onClick={startCamera} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">🔍 Analizar con cámara (IA)</button>
         <button onClick={() => setShowTelemetry(true)} className="ml-2 px-4 py-2 bg-gray-700 text-white rounded-lg">📡 Telemetría (POC)</button>
+        <button onClick={async () => { setShowAnalisisModal(true); try { const q = await fetch('/api/analisis'); const j = await q.json(); setAnalisisList(j); } catch (e) { console.warn('Error cargando analisis', e); } }} className="ml-2 px-4 py-2 bg-yellow-600 text-white rounded-lg">📸 Ver capturas</button>
       </div>
 
       {/* Install prompt (Android/iOS guidance) */}
@@ -1016,14 +1077,49 @@ function App() {
 
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <video ref={videoRef} className="w-full rounded" playsInline muted />
+                <div className="relative">
+                  <video ref={videoRef} className="w-full rounded" playsInline muted />
+                  <canvas ref={heatmapCanvasRef} className="pointer-events-none absolute inset-0 w-full h-full" />
+                </div>
                 <canvas ref={canvasRef} className="hidden" />
               </div>
               <div>
                 <h4 className="font-semibold">Resultado</h4>
+                <div className="mt-2 space-y-2">
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={heatmapEnabled} onChange={(e) => setHeatmapEnabled(e.target.checked)} />
+                    <span>Mostrar mapa de calor (detección de plagas)</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={mlEnabled} onChange={(e) => setMlEnabled(e.target.checked)} />
+                    <span>Activar detección por ML (mobilenet/custom)</span>
+                  </label>
+                  {dangerAlert && <div className="mt-2 text-sm text-red-600 font-semibold">⚠️ {dangerAlert}</div>}
+                  {mlPredictions && (
+                    <div className="mt-2 text-sm">
+                      <div className="font-semibold">Predicciones (ML):</div>
+                      <ul className="list-disc pl-5 text-sm">
+                        {mlPredictions.map((p, i) => (
+                          <li key={i}>{p.className} — {(p.probability * 100).toFixed(1)}%</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="mt-3">
+                    <label className="text-sm">Modelo custom (opcional):</label>
+                    <div className="flex gap-2 mt-1">
+                      <input value={customModelUrl} onChange={(e) => setCustomModelUrl(e.target.value)} placeholder="https://.../model.json" className="flex-1 p-2 rounded border text-sm" />
+                      <button onClick={() => { localStorage.setItem('agrosens_custom_model', customModelUrl); alert('URL guardada en localStorage'); }} className="px-2 py-1 bg-blue-600 text-white rounded text-sm">Guardar</button>
+                    </div>
+                    <label className="inline-flex items-center gap-2 text-sm mt-2">
+                      <input type="checkbox" checked={autoSendAnalysis} onChange={(e) => { setAutoSendAnalysis(e.target.checked); localStorage.setItem('agrosens_auto_send', e.target.checked ? '1' : '0'); }} />
+                      <span>Enviar análisis automáticamente al backend</span>
+                    </label>
+                  </div>
+                </div>
                 {analyzing ? <div className="text-sm">Analizando...</div> : (
                   analysisResult ? (
-                    <div className="text-sm space-y-2">
+                    <div className="text-sm space-y-2 mt-2">
                       <div><strong>Veredicto:</strong> {analysisResult.verdict}</div>
                       {analysisResult.estimateDays && <div><strong>Estimación:</strong> ~{analysisResult.estimateDays} días</div>}
                       <div><strong>Color promedio:</strong> R {analysisResult.avg.r} G {analysisResult.avg.g} B {analysisResult.avg.b}</div>
@@ -1032,6 +1128,29 @@ function App() {
                   ) : <div className="text-sm text-gray-600">Captura una imagen y presiona Analizar.</div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: lista de capturas guardadas */}
+      {showAnalisisModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white dark:bg-gray-900 rounded-xl p-4 w-[95%] max-w-4xl overflow-auto">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold">Capturas guardadas</h3>
+              <div className="flex gap-2">
+                <button onClick={() => setShowAnalisisModal(false)} className="px-3 py-1 bg-gray-300 dark:bg-gray-700 rounded">Cerrar</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {analisisList.length === 0 && <div className="text-sm text-gray-600">No hay capturas guardadas.</div>}
+              {analisisList.map((a) => (
+                <div key={a._id} className="border rounded p-2">
+                  {a.image ? <img src={`data:image/jpeg;base64,${a.image}`} alt="thumb" className="w-full h-32 object-cover rounded" /> : <div className="w-full h-32 bg-gray-100 flex items-center justify-center">Sin imagen</div>}
+                  <div className="text-xs mt-2">{a.cultivo || '—'} • {new Date(a.createdAt || a.timestamp || Date.now()).toLocaleString()}</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
