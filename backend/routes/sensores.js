@@ -1,7 +1,11 @@
 import connectToDatabase from '../lib/connect.js';
+import express from 'express';
 import LecturaSensor from '../models/LecturaSensor.js';
 
-export default async function handler(req, res) {
+const router = express.Router();
+
+router.post('/', async (req, res) => {
+  res.json({ message: "Ruta de sensores funciona" });
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -21,4 +25,6 @@ export default async function handler(req, res) {
     console.error('/api/lecturas error:', err);
     return res.status(500).json({ error: String(err) });
   }
-}
+});
+
+export default router;

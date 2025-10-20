@@ -11,6 +11,7 @@ import alertasRoutes from "./routes/alertas.js";
 
 
 dotenv.config();
+console.log("MONGO_URI:", process.env.MONGO_URI);
 
 const start = async () => {
   try {

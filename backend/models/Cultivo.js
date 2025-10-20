@@ -1,17 +1,15 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const cultivoSchema = new mongoose.Schema({
-  nombre: String,
-  phMin: Number,
-  phMax: Number, 
-  humedadMin: Number,
-  humedadMax: Number, 
-  temperaturaMin: Number,
-  temperaturaMax: Number,
-  temporada: String,
-  descripcion: String,
-  imagenUrl: String,
+  nombre: { type: String, required: true },
+  ph: { type: [Number], required: true },
+  humedad: { type: [Number], required: true },
+  temperatura: { type: [Number], required: true },
+  imagen: { type: String, required: true },
+  icono: { type: String, required: true },
+  siembra: { type: [String], required: true },
 });
 
-export default mongoose.model("Cultivo", cultivoSchema);
-  
+const Cultivo = mongoose.model('Cultivo', cultivoSchema);
+
+export default Cultivo;

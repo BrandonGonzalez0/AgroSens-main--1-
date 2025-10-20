@@ -1,38 +1,50 @@
-import mongoose from "mongoose";
-import Cultivo from "../models/Cultivo.js";
+import mongoose from 'mongoose';
+import Cultivo from '../models/Cultivo.js'; // Asumimos que tienes un modelo Cultivo
+import express from 'express';
 
-let conn; // conexión compartida entre invocaciones
+const router = express.Router();
 
-async function connectDB() {
-  if (!conn) {
-    const uri = process.env.MONGO_URI;
-    if (!uri) throw new Error("Falta MONGO_URI en variables de entorno");
-    const opts = {};
-    // Si la URI NO incluye el nombre de la base, descomenta:
-    // opts.dbName = process.env.MONGO_DB || "AgroSens";
-    conn = mongoose.connect(uri, opts);
-  }
-  await conn;
-}
-
-export default async function handler(req, res) {
-  // CORS básico (ajusta origin en producción)
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(204).end();
-
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET, OPTIONS");
-    return res.status(405).json({ error: "Method Not Allowed" });
-  }
-
+// Conexión a la base de datos
+const connectDB = async () => {
   try {
+    // Si no hay una conexión activa, se establece una nueva
+    if (mongoose.connection.readyState === 0) {
+      const uri = process.env.MONGO_URI;
+      if (!uri) throw new Error("Falta MONGO_URI en las variables de entorno");
+      await mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+      console.log("Conectado a MongoDB");
+    }
+  } catch (err) {
+    console.error("Error al conectar con MongoDB:", err);
+    throw new Error("Error de conexión a la base de datos");
+  }
+};
+
+// Ruta principal para probar la conexión
+router.get('/', (req, res) => {
+  res.json({ message: "Ruta de cultivos funciona" });
+});
+
+// Ruta para obtener todos los cultivos
+router.get('/all', async (req, res) => {
+  try {
+    // Primero, nos aseguramos de que la base de datos esté conectada
     await connectDB();
+
+    // Ahora obtenemos los cultivos
     const cultivos = await Cultivo.find().lean();
+
+    // Si no hay cultivos, enviamos una respuesta vacía
+    if (!cultivos || cultivos.length === 0) {
+      return res.status(404).json({ message: "No se encontraron cultivos" });
+    }
+
+    // Devolvemos los cultivos
     return res.status(200).json(cultivos);
   } catch (err) {
     console.error("/api/cultivos error:", err);
     return res.status(500).json({ error: "Error al obtener cultivos" });
   }
-}
+});
+
+export default router;

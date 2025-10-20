@@ -8,12 +8,12 @@
     "dev:all": "npx concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\""
   },
   "dependencies": {
+    "next": "^12.0.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
-    "vite": "^2.0.0",
-    "next": "^12.0.0"
+    "vite": "^2.0.0"
   },
   "devDependencies": {
-    "vite-plugin-react": "^1.0.0"
+    "vite-plugin-react": "^4.0.1"
   }
 }

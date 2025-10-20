@@ -1,7 +1,11 @@
 import connectToDatabase from '../lib/connect.js';
 import AnalisisIA from '../models/AnalisisIA.js';
+import express from 'express';
 
-export default async function handler(req, res) {
+const router = express.Router();
+
+router.post('/', async (req, res) => {
+  res.json({ message: "Ruta de IA funciona" });
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -49,4 +53,6 @@ export default async function handler(req, res) {
     console.error('/api/analisis error:', err);
     return res.status(500).json({ error: String(err) });
   }
-}
+});
+
+export default router;
