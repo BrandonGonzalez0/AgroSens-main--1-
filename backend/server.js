@@ -9,6 +9,7 @@ import recomendacionesRoutes from "./routes/recomendaciones.js";
 import usuariosRoutes from "./routes/usuarios.js";
 import alertasRoutes from "./routes/alertas.js";
 
+
 dotenv.config();
 
 const start = async () => {
@@ -29,6 +30,7 @@ const start = async () => {
     app.use("/api/recomendaciones", recomendacionesRoutes);
     app.use("/api/usuarios", usuariosRoutes);
     app.use("/api/alertas", alertasRoutes);
+ 
 
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`));

@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       const out = docs.map(d => ({ ...d, image: d.image ? d.image.toString('base64') : null, heatmap: d.heatmap ? d.heatmap.toString('base64') : null }));
       return res.status(200).json(out);
     } catch (e) {
-      console.error('/api/analisis GET error', e);
+      console.error('/api/ia GET error', e);
       return res.status(500).json({ error: String(e) });
     }
   }
