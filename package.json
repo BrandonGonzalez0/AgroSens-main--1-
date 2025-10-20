@@ -2,9 +2,10 @@
   "name": "agrosens",
   "version": "1.0.0",
   "scripts": {
-    "dev": "cd frontend && npm run dev",      
-    "build": "cd frontend && npm run build",  
-    "start": "cd frontend && npm run start"  
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm run start",
+    "dev:all": "npx concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\""
   },
   "dependencies": {
     "react": "^18.0.0",

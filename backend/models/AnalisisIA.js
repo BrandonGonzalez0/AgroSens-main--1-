@@ -1,20 +1,10 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-const analisisSchema = new mongoose.Schema({
-  deviceId: String,
-  cultivo: String,
-  timestamp: { type: Date, default: Date.now },
-  verdict: String,
-  estimateDays: Number,
-  avgColor: { r: Number, g: Number, b: Number },
-  greenRatio: Number,
-  redPortion: Number,
-  bboxArea: Number,
-  areaRatio: Number,
-  image: Buffer,
-  mlPredictions: [mongoose.Schema.Types.Mixed],
-  heatmap: Buffer,
-  raw: mongoose.Schema.Types.Mixed
-}, { collection: 'analisis_ia', timestamps: true });
+const analisisIASchema = new mongoose.Schema({
+  tipo: { type: String, enum: ["Madurez", "plagas"], required: true },
+  resultado: String,
+  imagenUrl: String,
+  fecha: { type: Date, default: Date.now },
+});
 
-export default mongoose.models.AnalisisIA || mongoose.model('AnalisisIA', analisisSchema);
+export default mongoose.models.AnalisisIA || mongoose.model("AnalisisIA", analisisIASchema);

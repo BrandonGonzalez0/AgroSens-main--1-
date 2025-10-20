@@ -1,11 +1,14 @@
 import mongoose from 'mongoose';
 
 const alertaSchema = new mongoose.Schema({
+
   tipo: String,
   mensaje: String,
-  nivel: { type: String, default: 'info' },
-  metadata: mongoose.Schema.Types.Mixed,
-  acknowledged: { type: Boolean, default: false }
-}, { collection: 'alertas', timestamps: true });
+  prioridad: { type: String, enum: ['baja', 'media', 'alta'], default: 'media' },
+  fecha: { type: Date, default: Date.now },
 
-export default mongoose.models.Alerta || mongoose.model('Alerta', alertaSchema);
+
+
+});
+
+export default mongoose.model("Alerta", alertaSchema);

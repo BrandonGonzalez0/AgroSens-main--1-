@@ -1,12 +1,11 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-const lecturaSchema = new mongoose.Schema({
-  deviceId: { type: String, required: true, index: true },
-  timestamp: { type: Date, default: Date.now },
+const lecturasSensorSchema = new mongoose.Schema({
   ph: Number,
-  soilMoisture: Number,
-  temperature: Number,
-  raw: mongoose.Schema.Types.Mixed
-}, { collection: 'lecturas_sensores', timestamps: true });
+  humedad: Number,
+  temperatura: Number,
+  fecha: { type: Date, default: Date.now }
+});
 
-export default mongoose.models.LecturaSensor || mongoose.model('LecturaSensor', lecturaSchema);
+// Evita redefinir modelos en entornos con recarga (nodemon/hot-reload)
+export default mongoose.models.LecturaSensor || mongoose.model("LecturaSensor", lecturasSensorSchema);

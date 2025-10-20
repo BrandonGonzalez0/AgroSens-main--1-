@@ -1,10 +1,13 @@
 import mongoose from 'mongoose';
 
-const recSchema = new mongoose.Schema({
-  cultivo: String,
-  titulo: String,
-  cuerpo: String,
-  condiciones: mongoose.Schema.Types.Mixed
-}, { collection: 'recomendaciones', timestamps: true });
+const recomendacionSchema = new mongoose.Schema({
+  cultivoSugerido: { type: mongoose.Schema.Types.ObjectId, ref: 'Cultivo' },
+  condicionesActuales: {
+    ph: Number,
+    humedad: Number,
+    temperatura: Number
+  },
+  fecha: { type: Date, default: Date.now },
+});
 
-export default mongoose.models.Recomendacion || mongoose.model('Recomendacion', recSchema);
+export default mongoose.models.Recomendacion || mongoose.model("Recomendacion", recomendacionSchema);
