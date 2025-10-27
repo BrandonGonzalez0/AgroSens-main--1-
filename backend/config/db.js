@@ -5,9 +5,8 @@ import mongoose from "mongoose";
 export const connectDB = async () => {
   const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
   if (!uri) {
-    const msg = "Falta la variable de entorno MONGODB_URI o MONGO_URI. Por favor configúrala.";
-    console.error(msg);
-    throw new Error(msg);
+    console.warn("MONGODB_URI / MONGO_URI no configurada. Se iniciará el servidor en modo 'sin DB' (se usará almacenamiento local de respaldo).");
+    return null;
   }
 
   try {
@@ -20,6 +19,7 @@ export const connectDB = async () => {
     return mongoose.connection;
   } catch (error) {
     console.error("MongoDB - conexión fallida:", error.message || error);
-    throw error;
+    // No lanzar: devolvemos null para permitir que el servidor arranque en modo degradado
+    return null;
   }
 };

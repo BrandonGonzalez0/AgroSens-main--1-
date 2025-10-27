@@ -1,56 +1,112 @@
 import connectToDatabase from '../lib/connect.js';
 import AnalisisIA from '../models/AnalisisIA.js';
 import express from 'express';
+import fs from 'fs/promises';
+import path from 'path';
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
-  res.json({ message: "Ruta de IA funciona" });
+// Archivo local de respaldo cuando no hay MongoDB
+const DATA_DIR = path.join(process.cwd(), 'backend', 'data');
+const STORE_FILE = path.join(DATA_DIR, 'analisis_store.json');
+
+async function ensureDataStore() {
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    try {
+      await fs.access(STORE_FILE);
+    } catch (_) {
+      await fs.writeFile(STORE_FILE, JSON.stringify([]), 'utf8');
+    }
+  } catch (e) {
+    console.error('No se pudo asegurar el data store local:', e);
+  }
+}
+
+router.all('/', async (req, res) => {
+  // CORS simple
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
-  const uri = process.env.MONGO_URI;
-  if (!uri) return res.status(500).json({ error: 'MONGO_URI not configured' });
-  await connectToDatabase(uri);
+  // Si hay una URI de Mongo, nos conectamos; si no, usaremos el fallback de archivos
+  const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
+  let usingDb = false;
+  try {
+    if (uri) {
+      await connectToDatabase(uri);
+      usingDb = true;
+    }
+  } catch (e) {
+    console.warn('No se pudo conectar a MongoDB en /api/ia, usando almacenamiento local:', e.message || e);
+    usingDb = false;
+  }
 
   if (req.method === 'GET') {
-    try {
-      const { deviceId, cultivo, limit } = req.query;
-      const q = {};
-      if (deviceId) q.deviceId = deviceId;
-      if (cultivo) q.cultivo = cultivo;
-      const docs = await AnalisisIA.find(q).sort({ createdAt: -1 }).limit(Number(limit) || 50).lean();
-      // convert image buffer to base64 for transport
-      const out = docs.map(d => ({ ...d, image: d.image ? d.image.toString('base64') : null, heatmap: d.heatmap ? d.heatmap.toString('base64') : null }));
-      return res.status(200).json(out);
-    } catch (e) {
-      console.error('/api/ia GET error', e);
-      return res.status(500).json({ error: String(e) });
+    if (usingDb) {
+      try {
+        const { deviceId, cultivo, limit } = req.query;
+        const q = {};
+        if (deviceId) q.deviceId = deviceId;
+        if (cultivo) q.cultivo = cultivo;
+        const docs = await AnalisisIA.find(q).sort({ createdAt: -1 }).limit(Number(limit) || 50).lean();
+        const out = docs.map(d => ({ ...d, image: d.image ? d.image.toString('base64') : null, heatmap: d.heatmap ? d.heatmap.toString('base64') : null }));
+        return res.status(200).json(out);
+      } catch (e) {
+        console.error('/api/ia GET error', e);
+        return res.status(500).json({ error: String(e) });
+      }
+    } else {
+      // Leer desde archivo local
+      try {
+        await ensureDataStore();
+        const raw = await fs.readFile(STORE_FILE, 'utf8');
+        const arr = JSON.parse(raw || '[]');
+        return res.status(200).json(arr.slice(-50).reverse());
+      } catch (e) {
+        console.error('Error leyendo analisis locales:', e);
+        return res.status(500).json({ error: String(e) });
+      }
     }
   }
 
+  // POST
   try {
-    const uri = process.env.MONGO_URI;
-    if (!uri) return res.status(500).json({ error: 'MONGO_URI not configured' });
-    await connectToDatabase(uri);
-  const payload = req.body || {};
+    const payload = req.body || {};
 
-    // If heatmap was sent as base64, store as Buffer
+    // normalize base64 fields (leave as-is if already Buffer when using DB)
     if (payload.heatmap && typeof payload.heatmap === 'string') {
-      try { payload.heatmap = Buffer.from(payload.heatmap, 'base64'); } catch (e) { /* leave as-is */ }
+      // keep base64 string for local storage; DB path will convert to Buffer below
     }
-    // If image was sent as base64 JPEG/PNG string, store as Buffer
     if (payload.image && typeof payload.image === 'string') {
-      try { payload.image = Buffer.from(payload.image, 'base64'); } catch (e) { /* leave as-is */ }
+      // keep base64 string for local store
     }
 
-    const doc = new AnalisisIA(payload);
-    await doc.save();
-    return res.status(201).json({ ok: true, id: doc._id });
+    if (usingDb) {
+      // If heatmap/image are base64 strings, convert to Buffer for DB storage
+      if (payload.heatmap && typeof payload.heatmap === 'string') {
+        try { payload.heatmap = Buffer.from(payload.heatmap, 'base64'); } catch (e) { /* ignore */ }
+      }
+      if (payload.image && typeof payload.image === 'string') {
+        try { payload.image = Buffer.from(payload.image, 'base64'); } catch (e) { /* ignore */ }
+      }
+      const doc = new AnalisisIA(payload);
+      await doc.save();
+      return res.status(201).json({ ok: true, id: doc._id });
+    }
+
+    // Almacenamiento local: guardar objeto en el JSON
+    await ensureDataStore();
+    const raw = await fs.readFile(STORE_FILE, 'utf8');
+    const arr = JSON.parse(raw || '[]');
+    const id = `${Date.now()}-${Math.floor(Math.random()*10000)}`;
+    const record = { id, createdAt: new Date().toISOString(), ...payload };
+    arr.push(record);
+    await fs.writeFile(STORE_FILE, JSON.stringify(arr, null, 2), 'utf8');
+    return res.status(201).json({ ok: true, id });
   } catch (err) {
-    console.error('/api/analisis error:', err);
+    console.error('/api/ia POST error:', err);
     return res.status(500).json({ error: String(err) });
   }
 });

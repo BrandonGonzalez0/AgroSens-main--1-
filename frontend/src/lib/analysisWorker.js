@@ -11,10 +11,14 @@ let customModel = null;
 const loadTfAndMobilenet = async () => {
   if (tfLoaded) return;
   try {
+    // notify main thread that loading starts
+    try { self.postMessage({ status: 'model-loading' }); } catch (e) {}
     importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js');
     importScripts('https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js');
     tfLoaded = true;
+    try { self.postMessage({ status: 'model-loaded', model: 'mobilenet' }); } catch (e) {}
   } catch (e) {
+    try { self.postMessage({ status: 'model-error', error: String(e) }); } catch (ee) {}
     throw new Error('No se pudo cargar TF.js en el worker: ' + String(e));
   }
 };
@@ -115,10 +119,13 @@ self.onmessage = async function (e) {
         // Load custom model if requested
         if (customModelUrl && !customModel) {
           try {
+            try { self.postMessage({ id, status: 'custom-loading', url: customModelUrl }); } catch (e) {}
             // tf must be available globally after loadTfAndMobilenet
             customModel = await tf.loadLayersModel(customModelUrl);
+            try { self.postMessage({ id, status: 'custom-loaded', url: customModelUrl }); } catch (e) {}
           } catch (cmErr) {
             // keep customModel null and continue with mobilenet
+            try { self.postMessage({ id, status: 'custom-error', error: String(cmErr) }); } catch (e) {}
             self.postMessage({ id, warning: 'No se pudo cargar customModel: ' + String(cmErr) });
           }
         }

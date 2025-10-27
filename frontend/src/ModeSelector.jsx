@@ -7,6 +7,7 @@ import SuggestedCultivos from "./SuggestedCultivos";
 import Dashboard from "./Dashboard"; 
 import { validarCultivo, sugerirCultivos } from "./ServiciosCultivos"; 
 import cultivosDB from "./data/cultivos.json"; 
+import CultivosManager from "./CultivosManager";
 
 // --- Splash Screen ---
 function SplashScreen() {
@@ -41,6 +42,7 @@ function App() {
   const [temperatura, setTemperatura] = useState("");
   const [resultado, setResultado] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
+  const [showManager, setShowManager] = useState(false);
 
   // Splash screen
   useEffect(() => {
@@ -174,6 +176,11 @@ function App() {
             {darkMode ? "☀️ Modo Claro" : "🌙 Modo Oscuro"}
           </button>
         </div>
+        
+        <div className="mt-4 flex justify-center">
+          <button onClick={()=>setShowManager(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">⚙️ Gestionar cultivos</button>
+        </div>
+        {showManager && <CultivosManager open={showManager} onClose={()=>setShowManager(false)} />}
       </div>
     </div>
   );

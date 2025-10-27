@@ -2,10 +2,10 @@
   "name": "agrosens",
   "version": "1.0.0",
   "scripts": {
-    "dev": "cd frontend && npm run dev",
+  "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run start\"",
     "build": "cd frontend && npm run build",
     "start": "cd frontend && npm run start",
-    "dev:all": "npx concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\""
+  "dev:all": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run start\""
   },
   "dependencies": {
     "next": "^12.0.0",
@@ -14,6 +14,7 @@
     "vite": "^2.0.0"
   },
   "devDependencies": {
+    "concurrently": "^8.0.0",
     "vite-plugin-react": "^4.0.1"
   }
 }
