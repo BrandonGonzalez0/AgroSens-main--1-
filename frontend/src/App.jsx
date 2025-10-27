@@ -17,6 +17,7 @@ import cultivosDB from "./data/cultivos.json";
 import { enqueueItem, getPendingItems, addReadingLocally } from './lib/offlineDB';
 import { flushQueue } from './lib/sync';
 import WeatherRotator from './WeatherRotator';
+import { useSensorData } from './hooks/useSensorData';
 
 // Normaliza un nombre para buscar en cultivosDB (quita acentos, espacios y minúsculas)
 function normalizeKey(name) {
@@ -91,6 +92,8 @@ function App() {
   const [ph, setPh] = useState("");
   const [humedad, setHumedad] = useState("");
   const [temperatura, setTemperatura] = useState("");
+  
+  const { sensorData, autoMode, toggleAutoMode, fetchSensorData } = useSensorData();
   const [resultado, setResultado] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
 
@@ -104,6 +107,15 @@ function App() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallManual, setShowInstallManual] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  // Auto-fill sensor data when available
+  useEffect(() => {
+    if (autoMode && sensorData.ph && sensorData.humidity && sensorData.temperature) {
+      setPh(sensorData.ph);
+      setHumedad(sensorData.humidity);
+      setTemperatura(sensorData.temperature);
+    }
+  }, [sensorData, autoMode]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -583,8 +595,48 @@ function App() {
             <div className="lg:col-span-2">
               <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
                 <div className="mb-8">
-                  <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">Datos del Cultivo</h2>
-                  <p className="text-gray-600 dark:text-gray-300">Completa la información para validar las condiciones</p>
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">Datos del Cultivo</h2>
+                      <p className="text-gray-600 dark:text-gray-300">Completa la información para validar las condiciones</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${
+                        sensorData.isConnected 
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                          : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                      }`}>
+                        <div className={`w-2 h-2 rounded-full ${
+                          sensorData.isConnected ? 'bg-green-500' : 'bg-red-500'
+                        }`}></div>
+                        {sensorData.isConnected ? 'Arduino conectado' : 'Arduino desconectado'}
+                      </div>
+                      <button
+                        onClick={toggleAutoMode}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                          autoMode 
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        {autoMode ? '🤖 Auto' : '✋ Manual'}
+                      </button>
+                      {!autoMode && (
+                        <button
+                          onClick={fetchSensorData}
+                          disabled={sensorData.isLoading}
+                          className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {sensorData.isLoading ? '⏳' : '🔄'} Obtener
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {sensorData.lastUpdate && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                      Última actualización: {sensorData.lastUpdate.toLocaleString('es-ES')}
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6">
@@ -607,14 +659,24 @@ function App() {
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                       🧪 pH del suelo
+                      {autoMode && sensorData.ph && (
+                        <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                          🤖 Auto
+                        </span>
+                      )}
                     </label>
                     <input
                       type="number"
                       step="0.1"
                       value={ph}
                       onChange={(e) => setPh(e.target.value)}
-                      className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                        autoMode && sensorData.ph
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-green-500'
+                      }`}
                       placeholder="Ej: 6.5"
+                      readOnly={autoMode}
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rango típico: 5.5 - 8.0</p>
                   </div>
@@ -622,13 +684,23 @@ function App() {
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                       💧 Humedad del suelo (%)
+                      {autoMode && sensorData.humidity && (
+                        <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                          🤖 Auto
+                        </span>
+                      )}
                     </label>
                     <input
                       type="number"
                       value={humedad}
                       onChange={(e) => setHumedad(e.target.value)}
-                      className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                        autoMode && sensorData.humidity
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
+                      }`}
                       placeholder="Ej: 70"
+                      readOnly={autoMode}
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rango típico: 40 - 90%</p>
                   </div>
@@ -636,13 +708,23 @@ function App() {
                   <div className="md:col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                       🌡️ Temperatura ambiente (°C)
+                      {autoMode && sensorData.temperature && (
+                        <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                          🤖 Auto
+                        </span>
+                      )}
                     </label>
                     <input
                       type="number"
                       value={temperatura}
                       onChange={(e) => setTemperatura(e.target.value)}
-                      className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                      className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                        autoMode && sensorData.temperature
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-orange-500'
+                      }`}
                       placeholder="Ej: 22"
+                      readOnly={autoMode}
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rango típico: 10 - 35°C</p>
                   </div>
@@ -694,20 +776,68 @@ function App() {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Condiciones Disponibles</h2>
                 <p className="text-gray-600 dark:text-gray-300">Ingresa las condiciones de tu terreno y te sugeriremos los mejores cultivos</p>
+                
+                <div className="flex justify-center items-center gap-3 mt-4">
+                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${
+                    sensorData.isConnected 
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                      : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                  }`}>
+                    <div className={`w-2 h-2 rounded-full ${
+                      sensorData.isConnected ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                    {sensorData.isConnected ? 'Arduino conectado' : 'Arduino desconectado'}
+                  </div>
+                  <button
+                    onClick={toggleAutoMode}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      autoMode 
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {autoMode ? '🤖 Auto' : '✋ Manual'}
+                  </button>
+                  {!autoMode && (
+                    <button
+                      onClick={fetchSensorData}
+                      disabled={sensorData.isLoading}
+                      className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {sensorData.isLoading ? '⏳' : '🔄'} Obtener
+                    </button>
+                  )}
+                </div>
+                
+                {sensorData.lastUpdate && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Última actualización: {sensorData.lastUpdate.toLocaleString('es-ES')}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                     🧪 pH del suelo
+                    {autoMode && sensorData.ph && (
+                      <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                        🤖 Auto
+                      </span>
+                    )}
                   </label>
                   <input
                     type="number"
                     step="0.1"
                     value={ph}
                     onChange={(e) => setPh(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                      autoMode && sensorData.ph
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
+                    }`}
                     placeholder="Ej: 6.5"
+                    readOnly={autoMode}
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Nivel de acidez/alcalinidad del suelo</p>
                 </div>
@@ -715,13 +845,23 @@ function App() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                     💧 Humedad del suelo (%)
+                    {autoMode && sensorData.humidity && (
+                      <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                        🤖 Auto
+                      </span>
+                    )}
                   </label>
                   <input
                     type="number"
                     value={humedad}
                     onChange={(e) => setHumedad(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                      autoMode && sensorData.humidity
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
+                    }`}
                     placeholder="Ej: 70"
+                    readOnly={autoMode}
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Porcentaje de humedad disponible</p>
                 </div>
@@ -729,13 +869,23 @@ function App() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                     🌡️ Temperatura promedio (°C)
+                    {autoMode && sensorData.temperature && (
+                      <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                        🤖 Auto
+                      </span>
+                    )}
                   </label>
                   <input
                     type="number"
                     value={temperatura}
                     onChange={(e) => setTemperatura(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                      autoMode && sensorData.temperature
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
+                    }`}
                     placeholder="Ej: 22"
+                    readOnly={autoMode}
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Temperatura ambiente promedio</p>
                 </div>

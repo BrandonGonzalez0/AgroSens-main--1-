@@ -5,14 +5,45 @@ import { sanitizeInput } from '../middleware/validation.js';
 
 const router = express.Router();
 
+// Get latest sensor reading
+router.get('/latest', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(204).end();
+
+  try {
+    const uri = process.env.MONGO_URI;
+    if (!uri) {
+      // Simulate sensor data when no database
+      const mockData = {
+        ph: 6.5 + (Math.random() - 0.5) * 2,
+        soilMoisture: 65 + (Math.random() - 0.5) * 20,
+        temperature: 22 + (Math.random() - 0.5) * 10,
+        timestamp: new Date().toISOString()
+      };
+      return res.json(mockData);
+    }
+    
+    await connectToDatabase(uri);
+    const latest = await LecturaSensor.findOne().sort({ timestamp: -1 }).lean();
+    
+    if (!latest) {
+      return res.status(404).json({ error: 'No sensor data available' });
+    }
+    
+    return res.json(latest);
+  } catch (err) {
+    console.error('/api/sensores/latest error:', err);
+    return res.status(500).json({ error: String(err) });
+  }
+});
+
 router.post('/', sanitizeInput, async (req, res) => {
-  res.json({ message: "Ruta de sensores funciona" });
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(204).end();
-
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   try {
     const uri = process.env.MONGO_URI;
@@ -23,7 +54,7 @@ router.post('/', sanitizeInput, async (req, res) => {
     await doc.save();
     return res.status(201).json({ ok: true, id: doc._id });
   } catch (err) {
-    console.error('/api/lecturas error:', err);
+    console.error('/api/sensores error:', err);
     return res.status(500).json({ error: String(err) });
   }
 });
