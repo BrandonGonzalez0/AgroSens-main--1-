@@ -1,7 +1,7 @@
 import connectToDatabase from '../lib/connect.js';
 import express from 'express';
 import LecturaSensor from '../models/LecturaSensor.js';
-const { sanitizeInput } = require('../middleware/validation.js');
+import { sanitizeInput } from '../middleware/validation.js';
 
 const router = express.Router();
 

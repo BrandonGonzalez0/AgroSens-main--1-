@@ -5,32 +5,66 @@ const CaptureGallery = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [selectedCapture, setSelectedCapture] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [activeCategory, setActiveCategory] = useState('all');
 
   useEffect(() => {
     if (isOpen) {
       loadCaptures();
+      
+      // Listen for analysis updates
+      const handleAnalysisUpdate = () => {
+        loadCaptures();
+      };
+      
+      window.addEventListener('analysisUpdated', handleAnalysisUpdate);
+      
+      return () => {
+        window.removeEventListener('analysisUpdated', handleAnalysisUpdate);
+      };
     }
   }, [isOpen]);
 
   const loadCaptures = async () => {
     setLoading(true);
     try {
+      // Load from localStorage gallery
+      const localGallery = JSON.parse(localStorage.getItem('agrosens_gallery') || '[]');
+      
+      // Load from API
       const response = await fetch('/api/ia', {
         headers: { 'X-CSRF-Token': localStorage.getItem('csrfToken') || '' }
       });
-      const data = await response.json();
+      const apiData = await response.json();
       
-      // Sort by date (newest first)
-      const sortedCaptures = data
-        .filter(capture => capture.image) // Only captures with images
-        .sort((a, b) => new Date(b.createdAt || b.timestamp) - new Date(a.createdAt || a.timestamp));
+      // Transform API data
+      const apiCaptures = apiData
+        .filter(item => item.image)
+        .map(item => ({
+          ...item,
+          id: item._id || item.id,
+          category: getCategoryFromVerdict(item.verdict, item.analysisMode),
+          saved: false
+        }));
       
-      setCaptures(sortedCaptures);
+      // Combine and sort by timestamp
+      const allCaptures = [...localGallery, ...apiCaptures]
+        .sort((a, b) => new Date(b.timestamp || b.createdAt) - new Date(a.timestamp || a.createdAt));
+      
+      setCaptures(allCaptures);
     } catch (error) {
       console.error('Error loading captures:', error);
     } finally {
       setLoading(false);
     }
+  };
+  
+  const getCategoryFromVerdict = (verdict, mode) => {
+    if (mode === 'pest') {
+      return verdict?.includes('plaga') ? 'plagas' : 'sanas';
+    }
+    if (verdict === 'maduro') return 'maduras';
+    if (verdict === 'verde' || verdict === 'inmaduro') return 'verdes';
+    return 'desarrollo';
   };
 
   const deleteCapture = async (captureId) => {
@@ -52,13 +86,14 @@ const CaptureGallery = ({ isOpen, onClose }) => {
   };
 
   const filteredCaptures = captures.filter(capture => {
-    if (filter === 'all') return true;
-    if (filter === 'mature') return capture.verdict === 'maduro';
-    if (filter === 'immature') return capture.verdict !== 'maduro' && capture.verdict !== 'no_vegetal';
-    if (filter === 'invalid') return capture.verdict === 'no_vegetal';
-    if (filter === 'pests') return capture.heatmapEnabled;
-    return true;
+    if (activeCategory === 'all') return true;
+    return capture.category === activeCategory;
   });
+  
+  const getCategoryCount = (category) => {
+    if (category === 'all') return captures.length;
+    return captures.filter(c => c.category === category).length;
+  };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('es-ES', {
@@ -77,45 +112,71 @@ const CaptureGallery = ({ isOpen, onClose }) => {
       <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-[95%] max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">📸 Galería de Capturas</h2>
-          <button 
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded"
-          >
-            Cerrar
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={loadCaptures}
+              className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+            >
+              🔄 Actualizar
+            </button>
+            <button 
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
 
-        {/* Filters */}
+        {/* Category Filters */}
         <div className="flex gap-2 mb-4 flex-wrap">
-          <button 
-            onClick={() => setFilter('all')}
-            className={`px-3 py-1 rounded text-sm ${filter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+          <button
+            onClick={() => setActiveCategory('all')}
+            className={`px-3 py-1 rounded text-sm ${
+              activeCategory === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'
+            }`}
           >
-            Todas ({captures.length})
+            📋 Todas ({getCategoryCount('all')})
           </button>
-          <button 
-            onClick={() => setFilter('mature')}
-            className={`px-3 py-1 rounded text-sm ${filter === 'mature' ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+          <button
+            onClick={() => setActiveCategory('maduras')}
+            className={`px-3 py-1 rounded text-sm ${
+              activeCategory === 'maduras' ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-700'
+            }`}
           >
-            Maduras
+            🍅 Maduras ({getCategoryCount('maduras')})
           </button>
-          <button 
-            onClick={() => setFilter('immature')}
-            className={`px-3 py-1 rounded text-sm ${filter === 'immature' ? 'bg-yellow-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+          <button
+            onClick={() => setActiveCategory('verdes')}
+            className={`px-3 py-1 rounded text-sm ${
+              activeCategory === 'verdes' ? 'bg-yellow-600 text-white' : 'bg-gray-200 dark:bg-gray-700'
+            }`}
           >
-            En desarrollo
+            🌱 Verdes ({getCategoryCount('verdes')})
           </button>
-          <button 
-            onClick={() => setFilter('invalid')}
-            className={`px-3 py-1 rounded text-sm ${filter === 'invalid' ? 'bg-red-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+          <button
+            onClick={() => setActiveCategory('desarrollo')}
+            className={`px-3 py-1 rounded text-sm ${
+              activeCategory === 'desarrollo' ? 'bg-orange-600 text-white' : 'bg-gray-200 dark:bg-gray-700'
+            }`}
           >
-            No válidas
+            🌿 Desarrollo ({getCategoryCount('desarrollo')})
           </button>
-          <button 
-            onClick={() => setFilter('pests')}
-            className={`px-3 py-1 rounded text-sm ${filter === 'pests' ? 'bg-orange-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+          <button
+            onClick={() => setActiveCategory('plagas')}
+            className={`px-3 py-1 rounded text-sm ${
+              activeCategory === 'plagas' ? 'bg-red-600 text-white' : 'bg-gray-200 dark:bg-gray-700'
+            }`}
           >
-            Con detección de plagas
+            🐛 Plagas ({getCategoryCount('plagas')})
+          </button>
+          <button
+            onClick={() => setActiveCategory('sanas')}
+            className={`px-3 py-1 rounded text-sm ${
+              activeCategory === 'sanas' ? 'bg-teal-600 text-white' : 'bg-gray-200 dark:bg-gray-700'
+            }`}
+          >
+            ✅ Sanas ({getCategoryCount('sanas')})
           </button>
         </div>
 
@@ -145,14 +206,25 @@ const CaptureGallery = ({ isOpen, onClose }) => {
                         }`}
                         onClick={() => setSelectedCapture(capture)}
                       >
-                        <img 
-                          src={`data:image/jpeg;base64,${capture.image}`}
-                          alt="Captura"
-                          className="w-full h-32 object-cover"
-                        />
+                        <div className="relative">
+                          <img 
+                            src={capture.image?.startsWith('data:') ? capture.image : `data:image/jpeg;base64,${capture.image}`}
+                            alt="Captura"
+                            className="w-full h-32 object-cover"
+                            onError={(e) => {
+                              console.error('Error loading image:', capture.image?.substring(0, 50));
+                              e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDIwMCAxMjgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTI4IiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjEwMCIgeT0iNjQiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzlDQTNBRiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlbiBubyBkaXNwb25pYmxlPC90ZXh0Pgo8L3N2Zz4K';
+                            }}
+                          />
+                          {capture.saved && (
+                            <div className="absolute top-1 right-1 bg-purple-600 text-white px-1 py-0.5 rounded text-xs">
+                              💾
+                            </div>
+                          )}
+                        </div>
                         <div className="p-2 bg-white dark:bg-gray-700">
                           <p className="text-xs font-medium truncate">
-                            {capture.cultivo || 'Desconocido'}
+                            {capture.cultivo || capture.result?.type || 'Desconocido'}
                           </p>
                           <p className="text-xs text-gray-500">
                             {formatDate(capture.createdAt || capture.timestamp)}
@@ -179,9 +251,12 @@ const CaptureGallery = ({ isOpen, onClose }) => {
                     <h3 className="font-bold text-lg">Detalles de la Captura</h3>
                     
                     <img 
-                      src={`data:image/jpeg;base64,${selectedCapture.image}`}
+                      src={selectedCapture.image?.startsWith('data:') ? selectedCapture.image : `data:image/jpeg;base64,${selectedCapture.image}`}
                       alt="Captura seleccionada"
                       className="w-full rounded-lg"
+                      onError={(e) => {
+                        e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDMwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM5Q0EzQUYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZW4gbm8gZGlzcG9uaWJsZTwvdGV4dD4KPHN2Zz4K';
+                      }}
                     />
 
                     <div className="space-y-2 text-sm">
@@ -236,8 +311,8 @@ const CaptureGallery = ({ isOpen, onClose }) => {
                       <button 
                         onClick={() => {
                           const link = document.createElement('a');
-                          link.href = `data:image/jpeg;base64,${selectedCapture.image}`;
-                          link.download = `captura-${selectedCapture._id}.jpg`;
+                          link.href = selectedCapture.image?.startsWith('data:') ? selectedCapture.image : `data:image/jpeg;base64,${selectedCapture.image}`;
+                          link.download = `captura-${selectedCapture._id || selectedCapture.id}.jpg`;
                           link.click();
                         }}
                         className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"

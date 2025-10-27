@@ -1,6 +1,6 @@
 import express from "express";
 import Alerta from "../models/Alerta.js"; // Asegúrate que el modelo exista con ese nombre
-const { sanitizeInput } = require('../middleware/validation.js');
+import { sanitizeInput } from '../middleware/validation.js';
 
 const router = express.Router();
 

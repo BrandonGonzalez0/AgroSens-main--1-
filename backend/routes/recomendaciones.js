@@ -1,6 +1,6 @@
 import express from "express";
 import Recomendacion from "../models/Recomendacion.js"; // Asegúrate que coincida el nombre
-const { sanitizeInput } = require('../middleware/validation.js');
+import { sanitizeInput } from '../middleware/validation.js';
 
 const router = express.Router();
 

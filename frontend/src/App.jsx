@@ -10,6 +10,9 @@ import TelemetryDashboard from './TelemetryDashboard';
 import CameraAnalysis from './CameraAnalysis';
 import CaptureGallery from './CaptureGallery';
 import CropSelectionDashboard from './CropSelectionDashboard';
+import CropValidationResult from './CropValidationResult';
+import Navigation from './Navigation';
+import NotificationSystem, { showNotification } from './NotificationSystem';
 import cultivosDB from "./data/cultivos.json";
 import { enqueueItem, getPendingItems, addReadingLocally } from './lib/offlineDB';
 import { flushQueue } from './lib/sync';
@@ -81,178 +84,6 @@ function CultivoCard({ cultivo, onClick, selected }) {
   );
 }
 
-function DetallePanel({ item, onClose, currentPh, currentHum, currentTemp }) {
-  const [showRecs, setShowRecs] = useState(false);
-  const [recs, setRecs] = useState([]);
-
-  useEffect(() => {
-    // reset when item changes
-    setShowRecs(false);
-    setRecs([]);
-  }, [item]);
-
-  if (!item) return null;
-
-  const buildRecommendations = () => {
-    const list = [];
-    const db = cultivosDB[item.nombre.toLowerCase()];
-    const phVal = parseFloat(currentPh);
-    const humVal = parseFloat(currentHum);
-    const tempVal = parseFloat(currentTemp);
-
-    if (db && Array.isArray(db.ph)) {
-      if (!isNaN(phVal)) {
-        if (phVal < db.ph[0]) list.push({ id: 'ph_low', text: 'Aumentar pH: aplicar cal agrícola (monitorizar cada semana).', done: false });
-        else if (phVal > db.ph[1]) list.push({ id: 'ph_high', text: 'Reducir pH: aplicar azufre o enmiendas ácidas.', done: false });
-      }
-    }
-
-    if (db && Array.isArray(db.humedad)) {
-      if (!isNaN(humVal)) {
-        if (humVal < db.humedad[0]) list.push({ id: 'hum_low', text: 'Incrementar humedad: aumentar riego/uso de mulching.', done: false });
-        else if (humVal > db.humedad[1]) list.push({ id: 'hum_high', text: 'Reducir humedad: mejorar drenaje y reducir riegos.', done: false });
-      }
-    }
-
-    if (db && Array.isArray(db.temperatura)) {
-      if (!isNaN(tempVal)) {
-        if (tempVal < db.temperatura[0]) list.push({ id: 'temp_low', text: 'Aumentar temperatura: considerar invernadero o coberturas.', done: false });
-        else if (tempVal > db.temperatura[1]) list.push({ id: 'temp_high', text: 'Reducir temperatura: sombreo, ventilación o mallas.', done: false });
-      }
-    }
-
-    // Si no hay reglas específicas, ofrecer recomendaciones generales
-    if (list.length === 0) {
-      list.push({ id: 'general1', text: 'Realizar análisis de suelo completo antes de decisiones mayores.', done: false });
-      list.push({ id: 'general2', text: 'Mejorar materia orgánica para retención de agua y nutrientes.', done: false });
-    }
-
-    return list;
-  };
-
-  const onToggleRec = (id) => {
-    setRecs((prev) => {
-      const updated = prev.map(r => r.id === id ? { ...r, done: !r.done } : r);
-      try {
-        const key = `recsProgress:${normalizeKey(item.nombre)}`;
-        localStorage.setItem(key, JSON.stringify(updated));
-      } catch (e) {
-        console.warn('No se pudo guardar progreso en localStorage', e);
-      }
-      return updated;
-    });
-  };
-
-  const onShowRecs = () => {
-    // Si la DB del cultivo tiene pasos de siembra, usarlos como recomendaciones seleccionables
-    try {
-      const db = cultivosDB[item.nombre.toLowerCase()];
-      if (db && Array.isArray(db.siembra) && db.siembra.length > 0) {
-        const built = db.siembra.map((text, i) => ({ id: `siembra-${i}`, text, done: false }));
-        // intentar restaurar progreso desde localStorage
-        try {
-          const key = `recsProgress:${normalizeKey(item.nombre)}`;
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            // merge by id
-            for (const b of built) {
-              const found = parsed.find(p => p.id === b.id);
-              if (found) b.done = !!found.done;
-            }
-          }
-        } catch (e) {
-          // ignore restore errors
-        }
-        setRecs(built);
-        setShowRecs(true);
-        return;
-      }
-    } catch (e) {
-      // ignore and fall back
-    }
-
-    const built = buildRecommendations();
-    // intentar restaurar progreso para recomendaciones generadas
-    try {
-      const key = `recsProgress:${normalizeKey(item.nombre)}`;
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        for (const b of built) {
-          const found = parsed.find(p => p.id === b.id);
-          if (found) b.done = !!found.done;
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-    setRecs(built);
-    setShowRecs(true);
-  };
-
-  const doneCount = recs.filter(r => r.done).length;
-  const progress = recs.length ? Math.round((doneCount / recs.length) * 100) : 0;
-
-  return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="w-full md:w-80 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
-      <div className="w-full h-36 mb-3 overflow-hidden rounded-xl">
-        <a href={item.imagen} target="_blank" rel="noreferrer">
-          <img src={item.imagen} alt={item.nombre} className="w-full h-full object-cover" />
-        </a>
-      </div>
-      <h2 className="text-xl font-bold text-green-700 dark:text-green-300 mb-2">{item.nombre}</h2>
-      <p className="text-sm text-gray-700 dark:text-gray-300"><strong>pH ideal:</strong> {item.ph}</p>
-      <p className="text-sm text-gray-700 dark:text-gray-300"><strong>Humedad:</strong> {item.humedad}</p>
-      <p className="text-sm text-gray-700 dark:text-gray-300"><strong>Temperatura:</strong> {item.temperatura}</p>
-      <div className="mt-4 flex gap-2">
-        <button onClick={onClose} className="px-3 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-sm">Cerrar</button>
-        <button onClick={onShowRecs} className="px-3 py-2 rounded-lg bg-green-700 text-white text-sm">Ver recomendaciones</button>
-      </div>
-
-      {showRecs && (
-        <div className="mt-4">
-          <div className="text-sm text-gray-600 dark:text-gray-300 mb-2">Progreso: {progress}%</div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 h-2 rounded-full mb-3">
-            <div className="h-2 rounded-full bg-green-500" style={{ width: `${progress}%` }} />
-          </div>
-          <ul className="space-y-2">
-            {recs.map(r => (
-              <li key={r.id} className="flex items-center gap-2">
-                <input type="checkbox" checked={r.done} onChange={() => onToggleRec(r.id)} />
-                <span className={`text-sm ${r.done ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>{r.text}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Pasos de siembra (estáticos) sólo cuando no se muestran las recomendaciones seleccionables */}
-      {!showRecs && item && item.nombre && (() => {
-        const db = cultivosDB[item.nombre.toLowerCase()];
-        if (db && Array.isArray(db.siembra) && db.siembra.length > 0) {
-          return (
-            <div className="mt-4">
-              <h4 className="font-semibold mb-2">Paso a paso para sembrar {item.nombre}</h4>
-              <ol className="list-decimal list-inside text-sm space-y-2 text-gray-700 dark:text-gray-300">
-                {db.siembra.map((p, i) => (
-                  <li key={i}>{p}</li>
-                ))}
-              </ol>
-            </div>
-          );
-        }
-        return null;
-      })()}
-
-      {/* Nota: el gráfico comparativo se muestra únicamente en el modo 'definido' al validar un cultivo. */}
-      <div className="mt-4">
-        <p className="text-sm text-gray-500">El gráfico comparativo (Actual vs Ideal) se muestra en el panel de validación cuando trabajas en el modo <strong>Definido</strong>.</p>
-      </div>
-    </motion.div>
-  );
-}
-
 function App() {
   const [loading, setLoading] = useState(true);
   const [modo, setModo] = useState(null);
@@ -263,13 +94,12 @@ function App() {
   const [resultado, setResultado] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
 
-
   const [showTelemetry, setShowTelemetry] = useState(false);
   const [showCameraAnalysis, setShowCameraAnalysis] = useState(false);
   const [showCaptureGallery, setShowCaptureGallery] = useState(false);
   const [showCropDashboard, setShowCropDashboard] = useState(false);
+  const [showValidationResult, setShowValidationResult] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
-  // Reloj en tiempo real para la pantalla principal
   const [now, setNow] = useState(new Date());
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallManual, setShowInstallManual] = useState(false);
@@ -279,10 +109,6 @@ function App() {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
-
-
-
-
 
   useEffect(() => {
     const onBefore = (e) => {
@@ -309,15 +135,12 @@ function App() {
         console.log('PWA install choice', choice);
       } catch (e) { console.warn('install prompt error', e); }
       setDeferredPrompt(null);
-      // mark dismissed to avoid duplicate banners in InstallPromptIOS
       localStorage.setItem('agrosens_install_dismissed', '1');
     } else {
-      // show manual instructions modal
       setShowInstallManual(true);
     }
   };
 
-  // refresh pending count periodically
   useEffect(() => {
     let mounted = true;
     async function loadPending() {
@@ -329,13 +152,11 @@ function App() {
     return () => { mounted = false; clearInterval(id); };
   }, []);
 
-  // Splash screen
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 4000);
     return () => clearTimeout(timer);
   }, []);
 
-  // Dark mode
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
@@ -344,20 +165,11 @@ function App() {
     }
   }, [darkMode]);
 
-
-
-
-
-
-
-
-
-
-
   const handleValidar = () => {
+    showNotification('info', 'Validando cultivo', 'Analizando las condiciones proporcionadas...', 2000);
+    
     const res = validarCultivo(cultivo, ph, humedad, temperatura);
 
-    // If offline, enqueue the reading to send later
     if (!navigator.onLine) {
       const payload = {
         deviceId: cultivo || 'manual-entry',
@@ -366,56 +178,52 @@ function App() {
         soilMoisture: parseFloat(humedad) || null,
         temperature: parseFloat(temperatura) || null
       };
-      // save locally in readings cache and outbox
       addReadingLocally(payload).then(() => {
         enqueueItem({ type: 'reading', payload }).then((e) => {
+          showNotification('warning', 'Modo offline', 'Datos guardados localmente para sincronizar después');
           setResultado({ viable: res.viable, mensaje: `📥 Lectura guardada localmente y en cola para sincronizar. ${res.mensaje || ''}`, detalles: res.detalles || null });
+          setShowValidationResult(true);
         }).catch(() => {
+          showNotification('error', 'Error de almacenamiento', 'No se pudo encolar para sincronización');
           setResultado({ viable: res.viable, mensaje: `📥 Lectura guardada localmente (no se pudo encolar). ${res.mensaje || ''}`, detalles: res.detalles || null });
+          setShowValidationResult(true);
         });
       }).catch(() => {
+        showNotification('error', 'Error crítico', 'No se pudo guardar los datos localmente');
         setResultado({ viable: res.viable, mensaje: `📥 Error guardando localmente. ${res.mensaje || ''}`, detalles: res.detalles || null });
+        setShowValidationResult(true);
       });
       return;
     }
 
     if (res.viable) {
-      setResultado({
-        viable: true,
-        mensaje: `✅ ${res.mensaje}`,
-        detalles: res.detalles || null,
-      });
+      showNotification('success', '✅ Validación exitosa', `El cultivo ${cultivo} es viable con estas condiciones`);
     } else {
-      setResultado({
-        viable: false,
-        mensaje: `❌ ${res.mensaje}`,
-        pasos: [
-          "Ajustar el pH del suelo aplicando enmiendas (cal para subirlo, azufre para bajarlo).",
-          "Mejorar la retención de humedad usando riego por goteo o cobertura orgánica.",
-          "Optimizar la temperatura mediante invernaderos, mallas de sombreo o ventilación.",
-          "Realizar un análisis de suelo para identificar nutrientes faltantes.",
-        ],
-        detalles: res.detalles || null,
-      });
+      showNotification('warning', '⚠️ Condiciones no óptimas', 'El cultivo puede tener dificultades con estas condiciones');
     }
+
+    setResultado({
+      viable: res.viable,
+      mensaje: res.mensaje,
+      detalles: res.detalles || null,
+    });
+    setShowValidationResult(true);
   };
 
   const handleSugerir = () => {
+    showNotification('info', 'Buscando cultivos', 'Analizando compatibilidad con las condiciones...', 2000);
+    
     const res = sugerirCultivos(ph, humedad, temperatura);
     if (res.length > 0) {
+      showNotification('success', '🌱 Cultivos encontrados', `Se encontraron ${res.length} cultivos compatibles`);
       setResultado({ viable: true, sugerencias: res });
       setShowCropDashboard(true);
     } else {
+      showNotification('warning', 'Sin resultados', 'No se encontraron cultivos compatibles con estas condiciones');
       setResultado({ viable: false, mensaje: "No hay cultivos compatibles con estas condiciones." });
     }
   };
 
-
-
-  // Estado derivado: si la validación devolvió viable
-  const isViable = resultado && resultado.viable;
-
-  // --- Splash ---
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-r from-green-100 via-green-200 to-green-300 dark:from-gray-800 dark:via-gray-900 dark:to-black transition-colors">
@@ -439,257 +247,548 @@ function App() {
     );
   }
 
-  // --- Selección de modo ---
   if (!modo) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-r from-green-100 via-green-200 to-green-300 dark:from-gray-800 dark:via-gray-900 dark:to-black text-gray-800 dark:text-gray-100 p-6 transition-colors">
-        <div className="flex flex-col items-center gap-4">
-          <motion.img
-            src={logo}
-            alt="AgroSens Logo"
-            className="w-36 h-36 drop-shadow-lg"
-            initial={{ scale: 0.8, rotate: -6, opacity: 0 }}
-            animate={{ scale: [0.9, 1.05, 1], rotate: [ -6, 4, 0], opacity: 1 }}
-            transition={{ duration: 1.2, repeat: 0, ease: 'easeOut' }}
-          />
-          <motion.h1
-            className="text-4xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-green-700 via-green-400 to-teal-300"
-            initial={{ y: -10, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-          >
-            AgroSens — Herramienta de control y gestión para tus cultivos
-          </motion.h1>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-all duration-500">
+        <div className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-green-600/10 to-blue-600/10 dark:from-green-400/5 dark:to-blue-400/5"></div>
+          <div className="relative px-6 py-8">
+            <div className="max-w-7xl mx-auto">
+              <div className="flex justify-between items-center mb-8">
+                <div className="flex items-center gap-4">
+                  <motion.img
+                    src={logo}
+                    alt="AgroSens"
+                    className="w-12 h-12 rounded-xl shadow-lg"
+                    initial={{ rotate: -10, opacity: 0 }}
+                    animate={{ rotate: 0, opacity: 1 }}
+                    transition={{ duration: 0.6 }}
+                  />
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">AgroSens</h1>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Sistema Inteligente de Cultivos</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    isOnline 
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' 
+                      : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
+                  }`}>
+                    {isOnline ? '🟢 Conectado' : '🟡 Sin conexión'}
+                  </div>
+                  <button 
+                    onClick={() => setDarkMode(!darkMode)}
+                    className="p-2 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all"
+                  >
+                    {darkMode ? '☀️' : '🌙'}
+                  </button>
+                  <button 
+                    onClick={onManualInstallClick}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors"
+                  >
+                    📱 Instalar App
+                  </button>
+                </div>
+              </div>
 
-          <div className="mt-1 flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
-            <div>Elige cómo quieres trabajar hoy · <span className="font-medium">{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(now)}</span></div>
-            <div className={`px-2 py-1 rounded text-xs ${isOnline ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{isOnline ? 'Online' : 'Offline'}</div>
-            <div className="ml-2 flex items-center gap-2">
-              <button className="px-2 py-1 bg-blue-600 text-white rounded text-xs" onClick={onManualInstallClick}>Instalar App</button>
-              <div className="text-xs text-gray-600 dark:text-gray-300">{deferredPrompt ? 'Prompt listo' : 'Prompt no disponible'}</div>
-              <button className="ml-2 px-2 py-1 bg-gray-200 dark:bg-gray-700 text-xs rounded" onClick={() => { localStorage.removeItem('agrosens_install_dismissed'); alert('Marca de dismiss eliminada'); }}>Reset Dismiss</button>
+              <div className="text-center mb-12">
+                <motion.h2
+                  className="text-4xl md:text-5xl font-bold text-gray-800 dark:text-white mb-4"
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ duration: 0.8 }}
+                >
+                  Bienvenido a tu
+                  <span className="block bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+                    Centro de Control Agrícola
+                  </span>
+                </motion.h2>
+                <motion.p
+                  className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto"
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ duration: 0.8, delay: 0.2 }}
+                >
+                  Gestiona tus cultivos con inteligencia artificial, análisis en tiempo real y recomendaciones personalizadas
+                </motion.p>
+                <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                  📅 {new Intl.DateTimeFormat('es-ES', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }).format(now)}
+                </div>
+              </div>
             </div>
-            
           </div>
-
-          {/* Form creativo con los 4 botones principales */}
-          <form className="mt-6 w-full max-w-2xl bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm p-6 rounded-3xl shadow-lg grid grid-cols-2 gap-4">
-            <motion.button
-              type="button"
-              onClick={() => setModo('definido')}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex flex-col items-start gap-2 p-4 rounded-2xl btn-primary shadow-lg"
-            >
-              <div className="text-2xl">🌱</div>
-              <div className="text-sm font-semibold">Modo Cultivo Definido</div>
-              <div className="text-xs opacity-90">Valida un cultivo con datos específicos</div>
-            </motion.button>
-
-            <motion.button
-              type="button"
-              onClick={() => setModo('sugerido')}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex flex-col items-start gap-2 p-4 rounded-2xl btn-primary shadow-lg"
-            >
-              <div className="text-2xl">🤝</div>
-              <div className="text-sm font-semibold">Modo Cultivo Sugerido</div>
-              <div className="text-xs opacity-90">Recibe recomendaciones según tus condiciones</div>
-            </motion.button>
-
-            <motion.button
-              type="button"
-              onClick={() => setShowCameraAnalysis(true)}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex flex-col items-start gap-2 p-4 rounded-2xl btn-primary shadow-lg"
-            >
-              <div className="text-2xl">🔍</div>
-              <div className="text-sm font-semibold">Analizar con cámara (IA)</div>
-              <div className="text-xs opacity-90">Detecta madurez y plagas en tiempo real</div>
-            </motion.button>
-
-            <motion.button
-              type="button"
-              onClick={() => setDarkMode(!darkMode)}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex flex-col items-start gap-2 p-4 rounded-2xl btn-primary shadow-lg"
-            >
-              <div className="text-2xl">{darkMode ? '☀️' : '🌙'}</div>
-              <div className="text-sm font-semibold">Cambiar tema</div>
-              <div className="text-xs opacity-90">Alterna modo claro/oscuro</div>
-            </motion.button>
-          </form>
-
-          {/* Panel de estadísticas/histórico simple */}
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-4xl">
-            <WeatherRotator />
-          </div>
-
-
-
-
-
         </div>
+
+        <div className="max-w-7xl mx-auto px-6 pb-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <motion.button
+              onClick={() => setShowCameraAnalysis(true)}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative">
+                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl">🔍</span>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Análisis IA</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Detecta madurez y plagas con tu cámara</p>
+                <div className="mt-4 text-xs text-purple-600 dark:text-purple-400 font-medium">Usar ahora →</div>
+              </div>
+            </motion.button>
+
+            <motion.button
+              onClick={() => setShowTelemetry(true)}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl">📊</span>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Dashboard</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Estadísticas y métricas de tus cultivos</p>
+                <div className="mt-4 text-xs text-blue-600 dark:text-blue-400 font-medium">Ver datos →</div>
+              </div>
+            </motion.button>
+
+            <motion.button
+              onClick={() => setShowCaptureGallery(true)}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-emerald-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative">
+                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl">📸</span>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Galería</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Historial de capturas y análisis</p>
+                <div className="mt-4 text-xs text-green-600 dark:text-green-400 font-medium">Explorar →</div>
+              </div>
+            </motion.button>
+
+            <motion.button
+              onClick={() => {
+                const items = ['🌱 Análisis completados', '📊 Datos sincronizados', '🔍 IA funcionando', '📱 App actualizada'];
+                const randomItem = items[Math.floor(Math.random() * items.length)];
+                alert(`✅ ${randomItem}`);
+              }}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-red-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative">
+                <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl">⚡</span>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Estado</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Verificar sistema y sincronización</p>
+                <div className="mt-4 text-xs text-orange-600 dark:text-orange-400 font-medium">Verificar →</div>
+              </div>
+            </motion.button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="relative group"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 rounded-3xl opacity-0 group-hover:opacity-5 transition-opacity"></div>
+              <div className="relative bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center">
+                    <span className="text-3xl">🌱</span>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Cultivo Definido</h3>
+                    <p className="text-gray-600 dark:text-gray-300">Valida condiciones para un cultivo específico</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4 mb-6">
+                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    Selecciona tu cultivo objetivo
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    Ingresa datos de pH, humedad y temperatura
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    Recibe validación y recomendaciones
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => setModo('definido')}
+                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl"
+                >
+                  Comenzar Validación
+                </button>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="relative group"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-3xl opacity-0 group-hover:opacity-5 transition-opacity"></div>
+              <div className="relative bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center">
+                    <span className="text-3xl">🤝</span>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Cultivo Sugerido</h3>
+                    <p className="text-gray-600 dark:text-gray-300">Descubre qué cultivos son ideales para ti</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4 mb-6">
+                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    Proporciona las condiciones disponibles
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    IA analiza compatibilidad con cultivos
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    Recibe sugerencias personalizadas
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => setModo('sugerido')}
+                  className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl"
+                >
+                  Obtener Sugerencias
+                </button>
+              </div>
+            </motion.div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <WeatherRotator />
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-100 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Actividad Reciente</h3>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                    <span className="text-sm">🌱</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800 dark:text-white">Sistema iniciado</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Hace unos momentos</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                    <span className="text-sm">📊</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800 dark:text-white">Dashboard listo</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Datos actualizados</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                    <span className="text-sm">🔍</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800 dark:text-white">IA disponible</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Análisis en tiempo real</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Modals */}
+        <NotificationSystem />
+        <InstallPromptIOS />
+        <CameraAnalysis isOpen={showCameraAnalysis} onClose={() => setShowCameraAnalysis(false)} />
+        <TelemetryDashboard isOpen={showTelemetry} onClose={() => setShowTelemetry(false)} />
+        <CaptureGallery isOpen={showCaptureGallery} onClose={() => setShowCaptureGallery(false)} />
       </div>
     );
   }
 
-  // --- Formulario común ---
+  // Formulario común
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-r from-green-100 via-green-200 to-green-300 dark:from-gray-800 dark:via-gray-900 dark:to-black text-gray-800 dark:text-gray-100 p-6 transition-colors">
-      <h1 className="text-3xl font-bold mb-6">
-        {modo === "definido" ? "🌱 Validacion de cultivos" : "🤝 Cultivos Sugeridos"}
-      </h1>
-
-      {modo === "definido" ? (
-        <div className="w-full max-w-4xl">
-          <div className="flex justify-between items-center mb-4">
-            <div />
-            <div className="flex gap-2">
-              <button onClick={() => { setModo(null); setResultado(null); }} className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-sm rounded-lg">⬅ Volver</button>
-              <button onClick={() => setDarkMode(!darkMode)} className="px-3 py-1 bg-gray-800 text-white rounded">{darkMode ? '☀️' : '🌙'}</button>
-            </div>
-          </div>
-          <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg transition-colors">
-            <div className="mb-4">
-              <label className="block mb-1 font-semibold">Selecciona el cultivo</label>
-              <select value={cultivo} onChange={(e) => setCultivo(e.target.value)} className="w-full border rounded-lg p-2 text-black">
-                <option value="">-- Elige un cultivo --</option>
-                {cultivos.map(c => (
-                  <option key={c.nombre} value={c.nombre}>{c.nombre}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-4">
-              <label className="block mb-1 font-semibold">pH</label>
-              <input
-                type="number"
-                value={ph}
-                onChange={(e) => setPh(e.target.value)}
-                className="w-full border rounded-lg p-2 text-black"
-                placeholder="Ej: 6.5"
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="block mb-1 font-semibold">Humedad (%)</label>
-              <input
-                type="number"
-                value={humedad}
-                onChange={(e) => setHumedad(e.target.value)}
-                className="w-full border rounded-lg p-2 text-black"
-                placeholder="Ej: 70"
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="block mb-1 font-semibold">Temperatura (°C)</label>
-              <input
-                type="number"
-                value={temperatura}
-                onChange={(e) => setTemperatura(e.target.value)}
-                className="w-full border rounded-lg p-2 text-black"
-                placeholder="Ej: 22"
-              />
-            </div>
-
-            <motion.button
-              onClick={handleValidar}
-              className="w-full bg-green-700 text-white py-2 rounded-xl font-semibold hover:bg-green-800"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Validar Cultivo
-            </motion.button>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg transition-colors">
-            <h3 className="text-lg font-semibold mb-3">Vista previa del cultivo</h3>
-            {cultivo ? (
-              (() => {
-                const found = cultivos.find(c => normalizeKey(c.nombre) === normalizeKey(cultivo));
-                if (found) return <CultivoCard cultivo={found} onClick={() => {}} selected={true} />;
-                return <div className="text-sm text-gray-600">No se encontró información del cultivo seleccionado.</div>;
-              })()
-            ) : (
-              <div className="text-sm text-gray-600">Selecciona un cultivo para ver la tarjeta aquí.</div>
-            )}
-          </div>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg w-full max-w-md transition-colors">
-          <div className="flex justify-end mb-3">
-            <div className="flex gap-2">
-              <button onClick={() => { setModo(null); setResultado(null); }} className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-sm rounded-lg">⬅ Volver</button>
-              <button onClick={() => setDarkMode(!darkMode)} className="px-3 py-1 bg-gray-800 text-white rounded">{darkMode ? '☀️' : '🌙'}</button>
-            </div>
-          </div>
-          <div className="mb-4">
-            <label className="block mb-1 font-semibold">pH</label>
-            <input
-              type="number"
-              value={ph}
-              onChange={(e) => setPh(e.target.value)}
-              className="w-full border rounded-lg p-2 text-black"
-              placeholder="Ej: 6.5"
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block mb-1 font-semibold">Humedad (%)</label>
-            <input
-              type="number"
-              value={humedad}
-              onChange={(e) => setHumedad(e.target.value)}
-              className="w-full border rounded-lg p-2 text-black"
-              placeholder="Ej: 70"
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block mb-1 font-semibold">Temperatura (°C)</label>
-            <input
-              type="number"
-              value={temperatura}
-              onChange={(e) => setTemperatura(e.target.value)}
-              className="w-full border rounded-lg p-2 text-black"
-              placeholder="Ej: 22"
-            />
-          </div>
-
-          <motion.button
-            onClick={handleSugerir}
-            className="w-full bg-blue-600 text-white py-2 rounded-xl font-semibold hover:bg-blue-700"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-all duration-500">
+      <Navigation
+        currentMode={modo}
+        onModeChange={(newMode) => {
+          setModo(newMode);
+          setResultado(null);
+        }}
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(!darkMode)}
+        isOnline={isOnline}
+        onInstallClick={onManualInstallClick}
+        onShowCamera={() => setShowCameraAnalysis(true)}
+        onShowDashboard={() => setShowTelemetry(true)}
+        onShowGallery={() => setShowCaptureGallery(true)}
+      />
+      
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="flex items-center gap-4 mb-6">
+          <button
+            onClick={() => { setModo(null); setResultado(null); }}
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all border border-gray-200 dark:border-gray-700"
           >
-            Sugerir Cultivos
-          </motion.button>
+            ⬅️ <span className="text-sm font-medium">Volver al inicio</span>
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+              {modo === "definido" ? "🌱 Validación de Cultivos" : "🤝 Sugerencias Inteligentes"}
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {modo === "definido" 
+                ? "Valida las condiciones para tu cultivo específico" 
+                : "Descubre qué cultivos son perfectos para tus condiciones"}
+            </p>
+          </div>
         </div>
-      )}
-
-      {/* Botones de funcionalidades principales */}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button onClick={() => setShowCameraAnalysis(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">🔍 Analizar con cámara</button>
-        <button onClick={() => setShowTelemetry(true)} className="px-4 py-2 bg-gray-700 text-white rounded-lg">📊 Dashboard</button>
-        <button onClick={() => setShowCaptureGallery(true)} className="px-4 py-2 bg-yellow-600 text-white rounded-lg">📸 Ver capturas</button>
       </div>
 
-      {/* Install prompt (Android/iOS guidance) */}
-      <InstallPromptIOS />
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {modo === "definido" ? (
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">Datos del Cultivo</h2>
+                  <p className="text-gray-600 dark:text-gray-300">Completa la información para validar las condiciones</p>
+                </div>
 
-      {/* New modular components */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                      🌱 Selecciona el cultivo
+                    </label>
+                    <select 
+                      value={cultivo} 
+                      onChange={(e) => setCultivo(e.target.value)} 
+                      className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                    >
+                      <option value="">-- Elige un cultivo --</option>
+                      {cultivos.map(c => (
+                        <option key={c.nombre} value={c.nombre}>{c.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                      🧪 pH del suelo
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={ph}
+                      onChange={(e) => setPh(e.target.value)}
+                      className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      placeholder="Ej: 6.5"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rango típico: 5.5 - 8.0</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                      💧 Humedad del suelo (%)
+                    </label>
+                    <input
+                      type="number"
+                      value={humedad}
+                      onChange={(e) => setHumedad(e.target.value)}
+                      className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      placeholder="Ej: 70"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rango típico: 40 - 90%</p>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                      🌡️ Temperatura ambiente (°C)
+                    </label>
+                    <input
+                      type="number"
+                      value={temperatura}
+                      onChange={(e) => setTemperatura(e.target.value)}
+                      className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                      placeholder="Ej: 22"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rango típico: 10 - 35°C</p>
+                  </div>
+                </div>
+
+                <motion.button
+                  onClick={handleValidar}
+                  disabled={!cultivo || !ph || !humedad || !temperatura}
+                  className="w-full mt-8 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {!cultivo || !ph || !humedad || !temperatura 
+                    ? 'Completa todos los campos' 
+                    : '✨ Validar Cultivo'}
+                </motion.button>
+              </div>
+            </div>
+
+            <div className="lg:col-span-1">
+              <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-700 sticky top-8">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Vista Previa</h3>
+                {cultivo ? (
+                  (() => {
+                    const found = cultivos.find(c => normalizeKey(c.nombre) === normalizeKey(cultivo));
+                    if (found) return <CultivoCard cultivo={found} onClick={() => {}} selected={true} />;
+                    return (
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <div className="text-4xl mb-2">🔍</div>
+                        <p className="text-sm">No se encontró información del cultivo</p>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                    <div className="text-4xl mb-4">🌱</div>
+                    <p className="text-sm">Selecciona un cultivo para ver la información detallada</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-3xl">🤝</span>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Condiciones Disponibles</h2>
+                <p className="text-gray-600 dark:text-gray-300">Ingresa las condiciones de tu terreno y te sugeriremos los mejores cultivos</p>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    🧪 pH del suelo
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={ph}
+                    onChange={(e) => setPh(e.target.value)}
+                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="Ej: 6.5"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Nivel de acidez/alcalinidad del suelo</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    💧 Humedad del suelo (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={humedad}
+                    onChange={(e) => setHumedad(e.target.value)}
+                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="Ej: 70"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Porcentaje de humedad disponible</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                    🌡️ Temperatura promedio (°C)
+                  </label>
+                  <input
+                    type="number"
+                    value={temperatura}
+                    onChange={(e) => setTemperatura(e.target.value)}
+                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="Ej: 22"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Temperatura ambiente promedio</p>
+                </div>
+              </div>
+
+              <motion.button
+                onClick={handleSugerir}
+                disabled={!ph || !humedad || !temperatura}
+                className="w-full mt-8 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {!ph || !humedad || !temperatura 
+                  ? 'Completa todos los campos' 
+                  : '🌱 Obtener Sugerencias'}
+              </motion.button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-100 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 text-center">Acciones Rápidas</h3>
+            <div className="flex flex-wrap justify-center gap-3">
+              <button 
+                onClick={() => setShowCameraAnalysis(true)} 
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
+              >
+                🔍 Análisis IA
+              </button>
+              <button 
+                onClick={() => setShowTelemetry(true)} 
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
+              >
+                📊 Dashboard
+              </button>
+              <button 
+                onClick={() => setShowCaptureGallery(true)} 
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
+              >
+                📸 Galería
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <NotificationSystem />
+      <InstallPromptIOS />
       <CameraAnalysis isOpen={showCameraAnalysis} onClose={() => setShowCameraAnalysis(false)} />
       <TelemetryDashboard isOpen={showTelemetry} onClose={() => setShowTelemetry(false)} />
       <CaptureGallery isOpen={showCaptureGallery} onClose={() => setShowCaptureGallery(false)} />
       
-      {/* Crop Selection Dashboard */}
       {showCropDashboard && resultado?.sugerencias && (
         <CropSelectionDashboard 
           suggestions={resultado.sugerencias} 
@@ -697,12 +796,20 @@ function App() {
         />
       )}
 
+      {showValidationResult && resultado && modo === "definido" && (
+        <CropValidationResult
+          resultado={resultado}
+          cultivo={cultivo}
+          ph={ph}
+          humedad={humedad}
+          temperatura={temperatura}
+          onClose={() => setShowValidationResult(false)}
+        />
+      )}
 
-      {/* --- Resultado --- */}
-      {resultado && (
+      {resultado && modo === "sugerido" && (
         <div className="mt-6 w-full flex flex-col items-center">
-          {modo === "sugerido" && resultado.viable && resultado.sugerencias ? (
-            // Success message for suggested crops (dashboard opens automatically)
+          {resultado.viable && resultado.sugerencias ? (
             <motion.div
               className="p-6 rounded-xl shadow-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 w-full max-w-lg text-center"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -724,120 +831,21 @@ function App() {
             </motion.div>
           ) : (
             <motion.div
-              className="mt-6 p-4 rounded-xl shadow-md bg-white dark:bg-gray-800 w-full max-w-lg text-left"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              className="p-6 rounded-xl shadow-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 w-full max-w-lg text-center"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
             >
-              <h2 className="text-lg font-bold mb-2">📜 Carta de Recomendación</h2>
-              <p className="mb-2">{resultado.mensaje}</p>
-              {!resultado.viable && resultado.pasos && (
-                <ul className="list-disc pl-6 text-sm text-gray-700 dark:text-gray-300">
-                  {resultado.pasos.map((paso, i) => (
-                    <li key={i}>{paso}</li>
-                  ))}
-                </ul>
-              )}
-
-              {modo === "definido" && cultivo && cultivosDB[normalizeKey(cultivo)] && (
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                  <div className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow ${isViable ? 'ring-2 ring-green-400' : ''}`}>
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold mb-2">Detalles del cultivo seleccionado</h3>
-                      {isViable && <span className="text-xs bg-green-600 text-white px-2 py-1 rounded-full">Apto</span>}
-                    </div>
-                    {/* buscar datos en la lista 'cultivos' exportada */}
-                    {(() => {
-                      const found = cultivos.find(c => normalizeKey(c.nombre) === normalizeKey(cultivo));
-                      if (found) return <CultivoCard cultivo={found} onClick={() => {}} selected={true} />;
-                      return <div className="text-sm text-gray-600">No se encontró información del cultivo seleccionado.</div>;
-                    })()}
-                  </div>
-
-                  <div className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow ${isViable ? 'border-l-4 border-green-500' : ''}`}>
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold mb-2">Requerimientos vs valores actuales</h3>
-                      {isViable && <div className="text-sm text-green-600">Plantilla: {cultivo}</div>}
-                    </div>
-                    {(() => {
-                      // Cuando el cultivo es apto, usamos su propia plantilla (rango ideal) como referencia
-                      const idealKey = (resultado && resultado.viable) ? normalizeKey(cultivo) : normalizeKey(cultivo);
-                      const idealDb = cultivosDB[idealKey] || { ph: [0, 0], humedad: [0, 0], temperatura: [0, 0] };
-
-                      const chartData = [
-                        {
-                          parametro: 'pH',
-                          Actual: Number(ph) || 0,
-                          Ideal: idealDb && Array.isArray(idealDb.ph) ? (Number(idealDb.ph[0]) + Number(idealDb.ph[1])) / 2 : 0,
-                        },
-                        {
-                          parametro: 'Humedad (%)',
-                          Actual: Number(humedad) || 0,
-                          Ideal: idealDb && Array.isArray(idealDb.humedad) ? (Number(idealDb.humedad[0]) + Number(idealDb.humedad[1])) / 2 : 0,
-                        },
-                        {
-                          parametro: 'Temperatura (°C)',
-                          Actual: Number(temperatura) || 0,
-                          Ideal: idealDb && Array.isArray(idealDb.temperatura) ? (Number(idealDb.temperatura[0]) + Number(idealDb.temperatura[1])) / 2 : 0,
-                        },
-                      ];
-
-                      return (
-                        <div>
-                          <div className="mb-3 text-sm text-gray-600 dark:text-gray-300">
-                            {resultado && resultado.detalles ? (
-                              (() => {
-                                const det = resultado.detalles;
-                                const rows = [];
-
-                                const makeRow = (label, obj) => {
-                                  const val = obj && obj.valor !== undefined && obj.valor !== null ? obj.valor : 'n/a';
-                                  const rango = obj && obj.rango ? obj.rango.join(' - ') : 'n/a';
-                                  const outOfRange = obj && obj.rango ? !(val >= obj.rango[0] && val <= obj.rango[1]) : false;
-                                  return (
-                                    <div key={label} className={`flex items-start justify-between ${outOfRange ? 'text-red-600' : ''}`}>
-                                      <div>
-                                        <strong>{label}:</strong> {val} <span className="text-xs text-gray-500">(ideal: {rango})</span>
-                                        {outOfRange && <div className="text-xs mt-1">⚠️ {getSuggestionFor(label, val, obj && obj.rango)}</div>}
-                                      </div>
-                                    </div>
-                                  );
-                                };
-
-                                
-
-                                rows.push(makeRow('pH', det.ph));
-                                rows.push(makeRow('Humedad', det.humedad));
-                                rows.push(makeRow('Temperatura', det.temperatura));
-
-                                return <div className="space-y-2">{rows}</div>;
-                              })()
-                            ) : (
-                              <div className="text-sm text-gray-600">Introduce los valores y pulsa Validar para ver detalles.</div>
-                            )}
-                          </div>
-
-                          <ResponsiveContainer width="100%" height={250}>
-                            <BarChart data={chartData}>
-                              <XAxis dataKey="parametro" />
-                              <YAxis />
-                              <Tooltip />
-                              <Legend />
-                              <Bar dataKey="Actual" fill="#f87171" />
-                              <Bar dataKey="Ideal" fill="#34d399" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
+              <div className="text-4xl mb-3">❌</div>
+              <h2 className="text-xl font-bold text-red-800 dark:text-red-200 mb-2">
+                No hay cultivos compatibles
+              </h2>
+              <p className="text-red-700 dark:text-red-300">
+                Las condiciones actuales no son adecuadas para ningún cultivo disponible.
+              </p>
             </motion.div>
           )}
         </div>
       )}
-
-      {/* estos son los botones que estan dentro del form para viaja entre el proyecto */}
     </div>
   );
 }

@@ -15,6 +15,17 @@ const TelemetryDashboard = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (isOpen) {
       loadDashboardData();
+      
+      // Listen for analysis updates
+      const handleAnalysisUpdate = () => {
+        loadDashboardData();
+      };
+      
+      window.addEventListener('analysisUpdated', handleAnalysisUpdate);
+      
+      return () => {
+        window.removeEventListener('analysisUpdated', handleAnalysisUpdate);
+      };
     }
   }, [isOpen]);
 

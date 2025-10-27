@@ -46,4 +46,4 @@ function sanitizeObject(obj) {
   return sanitized;
 }
 
-module.exports = { validateInput, sanitizeInput };
+export { validateInput, sanitizeInput };

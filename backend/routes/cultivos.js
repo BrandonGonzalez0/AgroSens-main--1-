@@ -3,7 +3,7 @@ import path from 'path';
 import mongoose from 'mongoose';
 import Cultivo from '../models/Cultivo.js';
 import express from 'express';
-const { sanitizeInput } = require('../middleware/validation.js');
+import { sanitizeInput } from '../middleware/validation.js';
 
 const router = express.Router();
 
