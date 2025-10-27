@@ -22,11 +22,17 @@ import argparse
 import tensorflow as tf
 import tensorflow_hub as hub
 import numpy as np
+import logging
+
+# Set random seeds for reproducibility
+tf.random.set_seed(42)
+np.random.seed(42)
 
 try:
     import tensorflow_datasets as tfds
     TFDS_AVAILABLE = True
-except Exception:
+except ImportError as e:
+    logging.warning(f"tensorflow_datasets not available: {e}")
     TFDS_AVAILABLE = False
 
 
@@ -43,17 +49,29 @@ def build_model(num_classes, img_size=224):
 
 
 def prepare_datasets_from_dir(data_dir, img_size=224, batch_size=32):
+    # Resolve paths to prevent path traversal
+    data_dir = os.path.abspath(data_dir)
     train_dir = os.path.join(data_dir, 'train')
     val_dir = os.path.join(data_dir, 'val')
+    
     if not os.path.isdir(train_dir) or not os.path.isdir(val_dir):
-        raise ValueError('Esperado directorio con structure data/train y data/val con subcarpetas por clase')
-    train_ds = tf.keras.preprocessing.image_dataset_from_directory(train_dir, image_size=(img_size, img_size), batch_size=batch_size)
-    val_ds = tf.keras.preprocessing.image_dataset_from_directory(val_dir, image_size=(img_size, img_size), batch_size=batch_size)
-    class_names = train_ds.class_names
-    AUTOTUNE = tf.data.AUTOTUNE
-    train_ds = train_ds.prefetch(AUTOTUNE)
-    val_ds = val_ds.prefetch(AUTOTUNE)
-    return train_ds, val_ds, class_names
+        raise ValueError('Expected directory structure: data/train and data/val with class subdirectories')
+    
+    try:
+        train_ds = tf.keras.preprocessing.image_dataset_from_directory(
+            train_dir, image_size=(img_size, img_size), batch_size=batch_size
+        )
+        val_ds = tf.keras.preprocessing.image_dataset_from_directory(
+            val_dir, image_size=(img_size, img_size), batch_size=batch_size
+        )
+        class_names = train_ds.class_names
+        AUTOTUNE = tf.data.AUTOTUNE
+        train_ds = train_ds.prefetch(AUTOTUNE)
+        val_ds = val_ds.prefetch(AUTOTUNE)
+        return train_ds, val_ds, class_names
+    except Exception as e:
+        logging.error(f"Error loading datasets from directory: {e}")
+        raise
 
 
 def prepare_datasets_from_tfds(name='plant_village', img_size=224, batch_size=32, split_train='train[:85%]', split_val='train[85%:]'):
@@ -92,10 +110,12 @@ def main():
     else:
         if TFDS_AVAILABLE:
             try:
-                train_ds, val_ds, class_names = prepare_datasets_from_tfds(name=args.tfds_name, img_size=args.img_size, batch_size=args.batch_size)
+                train_ds, val_ds, class_names = prepare_datasets_from_tfds(
+                    name=args.tfds_name, img_size=args.img_size, batch_size=args.batch_size
+                )
             except Exception as e:
-                print('Error cargando TFDS:', e)
-                print('--data_dir requerido si TFDS no está disponible o el dataset no existe')
+                logging.error(f'Error loading TFDS: {e}')
+                print('--data_dir required if TFDS is not available or dataset does not exist')
                 return
         else:
             print('tensorflow_datasets no disponible. Descarga PlantVillage manualmente y usa --data_dir')
@@ -115,9 +135,21 @@ def main():
         tf.keras.callbacks.EarlyStopping(patience=4, restore_best_weights=True)
     ]
 
-    print('Inicio de entrenamiento...')
-    os.makedirs(args.output_dir, exist_ok=True)
-    history = model.fit(train_ds, validation_data=val_ds, epochs=args.epochs, callbacks=callbacks)
+    print('Starting training...')
+    # Resolve output directory to prevent path traversal
+    output_dir = os.path.abspath(args.output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    try:
+        history = model.fit(
+            train_ds, 
+            validation_data=val_ds, 
+            epochs=args.epochs, 
+            callbacks=callbacks
+        )
+    except Exception as e:
+        logging.error(f"Training failed: {e}")
+        raise
 
     print('Guardando modelo en:', args.output_dir)
     model.save(args.output_dir, include_optimizer=False)

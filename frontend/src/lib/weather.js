@@ -1,16 +1,32 @@
 export async function fetchWeatherFor(lat, lon) {
+  // Validate coordinates to prevent SSRF
+  const latitude = parseFloat(lat);
+  const longitude = parseFloat(lon);
+  
+  if (isNaN(latitude) || isNaN(longitude) || 
+      latitude < -90 || latitude > 90 || 
+      longitude < -180 || longitude > 180) {
+    throw new Error('Invalid coordinates');
+  }
+  
   // Usaremos Open-Meteo para obtener temperatura actual y condiciones.
   // Docs: https://open-meteo.com/
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&current_weather=true&timezone=auto`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = await res.json();
-  if (!json || !json.current_weather) throw new Error('No weather data');
-  // Open-Meteo devuelve current_weather: { temperature, windspeed, weathercode }
-  const { temperature, weathercode } = json.current_weather;
-  const description = mapWeatherCodeToText(weathercode);
-  const icon = mapWeatherCodeToIcon(weathercode);
-  return { temperature, description, icon, raw: json };
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&timezone=auto`;
+  
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (!json || !json.current_weather) throw new Error('No weather data');
+    // Open-Meteo devuelve current_weather: { temperature, windspeed, weathercode }
+    const { temperature, weathercode } = json.current_weather;
+    const description = mapWeatherCodeToText(weathercode);
+    const icon = mapWeatherCodeToIcon(weathercode);
+    return { temperature, description, icon, raw: json };
+  } catch (error) {
+    console.error('Weather API error:', error);
+    throw new Error('Failed to fetch weather data');
+  }
 }
 
 function mapWeatherCodeToText(code) {

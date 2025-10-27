@@ -3,6 +3,7 @@ import path from 'path';
 import mongoose from 'mongoose';
 import Cultivo from '../models/Cultivo.js';
 import express from 'express';
+const { sanitizeInput } = require('../middleware/validation.js');
 
 const router = express.Router();
 
@@ -70,7 +71,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create
-router.post('/', async (req, res) => {
+router.post('/', sanitizeInput, async (req, res) => {
   try {
     const payload = req.body;
     if (!payload || !payload.nombre) return res.status(400).json({ error: 'Nombre requerido' });
@@ -95,7 +96,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update
-router.put('/:id', async (req, res) => {
+router.put('/:id', sanitizeInput, async (req, res) => {
   try {
     const { id } = req.params;
     const payload = req.body;
@@ -117,7 +118,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', sanitizeInput, async (req, res) => {
   try {
     const { id } = req.params;
     if (usingDB()) {

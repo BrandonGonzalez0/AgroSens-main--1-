@@ -1,5 +1,6 @@
 import express from "express";
 import Alerta from "../models/Alerta.js"; // Asegúrate que el modelo exista con ese nombre
+const { sanitizeInput } = require('../middleware/validation.js');
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ router.get("/", async (req, res) => {
 });
 
 // Crear una nueva alerta
-router.post("/", async (req, res) => {
+router.post("/", sanitizeInput, async (req, res) => {
   try {
     const nuevaAlerta = new Alerta(req.body);
     await nuevaAlerta.save();
@@ -25,7 +26,7 @@ router.post("/", async (req, res) => {
 });
 
 // Eliminar una alerta (por ID)
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", sanitizeInput, async (req, res) => {
   try {
     await Alerta.findByIdAndDelete(req.params.id);
     res.json({ message: "Alerta eliminada correctamente" });

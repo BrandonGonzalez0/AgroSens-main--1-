@@ -86,10 +86,28 @@ router.all('/', async (req, res) => {
     if (usingDb) {
       // If heatmap/image are base64 strings, convert to Buffer for DB storage
       if (payload.heatmap && typeof payload.heatmap === 'string') {
-        try { payload.heatmap = Buffer.from(payload.heatmap, 'base64'); } catch (e) { /* ignore */ }
+        try { 
+          // Validate base64 format
+          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload.heatmap)) {
+            throw new Error('Invalid base64 format');
+          }
+          payload.heatmap = Buffer.from(payload.heatmap, 'base64'); 
+        } catch (e) { 
+          console.error('Invalid heatmap data:', e);
+          delete payload.heatmap;
+        }
       }
       if (payload.image && typeof payload.image === 'string') {
-        try { payload.image = Buffer.from(payload.image, 'base64'); } catch (e) { /* ignore */ }
+        try { 
+          // Validate base64 format
+          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload.image)) {
+            throw new Error('Invalid base64 format');
+          }
+          payload.image = Buffer.from(payload.image, 'base64'); 
+        } catch (e) { 
+          console.error('Invalid image data:', e);
+          delete payload.image;
+        }
       }
       const doc = new AnalisisIA(payload);
       await doc.save();
@@ -107,6 +125,50 @@ router.all('/', async (req, res) => {
     return res.status(201).json({ ok: true, id });
   } catch (err) {
     console.error('/api/ia POST error:', err);
+    return res.status(500).json({ error: String(err) });
+  }
+});
+
+// DELETE route for removing analysis
+router.delete('/:id', async (req, res) => {
+  const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
+  let usingDb = false;
+  
+  try {
+    if (uri) {
+      await connectToDatabase(uri);
+      usingDb = true;
+    }
+  } catch (e) {
+    console.warn('No se pudo conectar a MongoDB en DELETE /api/ia, usando almacenamiento local:', e.message || e);
+    usingDb = false;
+  }
+
+  try {
+    const { id } = req.params;
+    
+    if (usingDb) {
+      const deleted = await AnalisisIA.findByIdAndDelete(id);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Analysis not found' });
+      }
+      return res.json({ ok: true, message: 'Analysis deleted successfully' });
+    } else {
+      // Local file storage deletion
+      await ensureDataStore();
+      const raw = await fs.readFile(STORE_FILE, 'utf8');
+      const arr = JSON.parse(raw || '[]');
+      const newArr = arr.filter(item => item.id !== id);
+      
+      if (newArr.length === arr.length) {
+        return res.status(404).json({ error: 'Analysis not found' });
+      }
+      
+      await fs.writeFile(STORE_FILE, JSON.stringify(newArr, null, 2), 'utf8');
+      return res.json({ ok: true, message: 'Analysis deleted successfully' });
+    }
+  } catch (err) {
+    console.error('/api/ia DELETE error:', err);
     return res.status(500).json({ error: String(err) });
   }
 });

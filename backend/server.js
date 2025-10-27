@@ -34,11 +34,14 @@ const start = async () => {
   }
 
   const app = express();
-  app.use(cors());
+  app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true
+  }));
   app.use(express.json({ limit: '10mb' }));
 
   // Servir modelos convertidos (TF.js) desde backend/public_models
-  app.use('/models', express.static(PUBLIC_MODELS_DIR));
+  app.use('/models', express.static(path.resolve(PUBLIC_MODELS_DIR)));
 
   app.get('/', (req, res) => {
     res.send('¡Servidor de AgroSens en funcionamiento!');

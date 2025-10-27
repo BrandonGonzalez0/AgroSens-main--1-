@@ -1,5 +1,6 @@
 import express from "express";
 import Recomendacion from "../models/Recomendacion.js"; // Asegúrate que coincida el nombre
+const { sanitizeInput } = require('../middleware/validation.js');
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ router.get("/", async (req, res) => {
 });
 
 // Crear una nueva recomendación
-router.post("/", async (req, res) => {
+router.post("/", sanitizeInput, async (req, res) => {
   try {
     const nueva = new Recomendacion(req.body);
     await nueva.save();

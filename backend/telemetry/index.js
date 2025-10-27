@@ -8,26 +8,32 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_FILE = path.join(__dirname, 'data.json');
+const DATA_FILE = path.resolve(__dirname, 'data.json');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json());
 
 function ensureDataFile() {
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify([]), 'utf8');
+  const resolvedPath = path.resolve(DATA_FILE);
+  if (!fs.existsSync(resolvedPath)) {
+    fs.writeFileSync(resolvedPath, JSON.stringify([]), 'utf8');
   }
 }
 
 function readData() {
   ensureDataFile();
-  const raw = fs.readFileSync(DATA_FILE, 'utf8');
+  const resolvedPath = path.resolve(DATA_FILE);
+  const raw = fs.readFileSync(resolvedPath, 'utf8');
   try { return JSON.parse(raw); } catch (e) { return []; }
 }
 
 function writeData(arr) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(arr, null, 2), 'utf8');
+  const resolvedPath = path.resolve(DATA_FILE);
+  fs.writeFileSync(resolvedPath, JSON.stringify(arr, null, 2), 'utf8');
 }
 
 // POST /api/ingest

@@ -1,5 +1,6 @@
 import express from "express";
 import Usuario from "../models/Usuario.js";
+const { sanitizeInput } = require('../middleware/validation.js');
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ router.get("/", async (req, res) => {
 });
 
 // Registrar nuevo usuario
-router.post("/", async (req, res) => {
+router.post("/", sanitizeInput, async (req, res) => {
   try {
     const nuevoUsuario = new Usuario(req.body);
     await nuevoUsuario.save();
@@ -36,7 +37,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // Actualizar usuario
-router.put("/:id", async (req, res) => {
+router.put("/:id", sanitizeInput, async (req, res) => {
   try {
     const actualizado = await Usuario.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json(actualizado);
@@ -46,7 +47,7 @@ router.put("/:id", async (req, res) => {
 });
 
 // Eliminar usuario
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", sanitizeInput, async (req, res) => {
   try {
     await Usuario.findByIdAndDelete(req.params.id);
     res.json({ message: "Usuario eliminado correctamente" });

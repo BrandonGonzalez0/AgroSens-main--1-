@@ -1,10 +1,11 @@
 import connectToDatabase from '../lib/connect.js';
 import express from 'express';
 import LecturaSensor from '../models/LecturaSensor.js';
+const { sanitizeInput } = require('../middleware/validation.js');
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
+router.post('/', sanitizeInput, async (req, res) => {
   res.json({ message: "Ruta de sensores funciona" });
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
