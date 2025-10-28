@@ -18,6 +18,7 @@ import { enqueueItem, getPendingItems, addReadingLocally } from './lib/offlineDB
 import { flushQueue } from './lib/sync';
 import WeatherRotator from './WeatherRotator';
 import { useSensorData } from './hooks/useSensorData';
+import apiClient, { sanitizeInput, validateSensorData } from './utils/api';
 
 // Normaliza un nombre para buscar en cultivosDB (quita acentos, espacios y minúsculas)
 function normalizeKey(name) {
@@ -177,18 +178,36 @@ function App() {
     }
   }, [darkMode]);
 
-  const handleValidar = () => {
+  const handleValidar = async () => {
+    // Sanitize inputs
+    const sanitizedCultivo = sanitizeInput(cultivo);
+    const sanitizedPh = sanitizeInput(ph);
+    const sanitizedHumedad = sanitizeInput(humedad);
+    const sanitizedTemperatura = sanitizeInput(temperatura);
+    
+    // Validate sensor data
+    const validationErrors = validateSensorData({
+      ph: sanitizedPh,
+      humidity: sanitizedHumedad,
+      temperature: sanitizedTemperatura
+    });
+    
+    if (validationErrors.length > 0) {
+      showNotification('error', 'Datos inválidos', validationErrors.join(', '));
+      return;
+    }
+    
     showNotification('info', 'Validando cultivo', 'Analizando las condiciones proporcionadas...', 2000);
     
-    const res = validarCultivo(cultivo, ph, humedad, temperatura);
+    const res = validarCultivo(sanitizedCultivo, sanitizedPh, sanitizedHumedad, sanitizedTemperatura);
 
     if (!navigator.onLine) {
       const payload = {
-        deviceId: cultivo || 'manual-entry',
+        deviceId: sanitizedCultivo || 'manual-entry',
         timestamp: new Date().toISOString(),
-        ph: parseFloat(ph) || null,
-        soilMoisture: parseFloat(humedad) || null,
-        temperature: parseFloat(temperatura) || null
+        ph: parseFloat(sanitizedPh) || null,
+        soilMoisture: parseFloat(sanitizedHumedad) || null,
+        temperature: parseFloat(sanitizedTemperatura) || null
       };
       addReadingLocally(payload).then(() => {
         enqueueItem({ type: 'reading', payload }).then((e) => {
@@ -223,9 +242,25 @@ function App() {
   };
 
   const handleSugerir = () => {
+    // Sanitize and validate inputs
+    const sanitizedPh = sanitizeInput(ph);
+    const sanitizedHumedad = sanitizeInput(humedad);
+    const sanitizedTemperatura = sanitizeInput(temperatura);
+    
+    const validationErrors = validateSensorData({
+      ph: sanitizedPh,
+      humidity: sanitizedHumedad,
+      temperature: sanitizedTemperatura
+    });
+    
+    if (validationErrors.length > 0) {
+      showNotification('error', 'Datos inválidos', validationErrors.join(', '));
+      return;
+    }
+    
     showNotification('info', 'Buscando cultivos', 'Analizando compatibilidad con las condiciones...', 2000);
     
-    const res = sugerirCultivos(ph, humedad, temperatura);
+    const res = sugerirCultivos(sanitizedPh, sanitizedHumedad, sanitizedTemperatura);
     if (res.length > 0) {
       showNotification('success', '🌱 Cultivos encontrados', `Se encontraron ${res.length} cultivos compatibles`);
       setResultado({ viable: true, sugerencias: res });

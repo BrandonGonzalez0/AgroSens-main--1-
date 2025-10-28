@@ -3,8 +3,19 @@ import AnalisisIA from '../models/AnalisisIA.js';
 import express from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import { validatePath } from '../middleware/validation.js';
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
+
+// Rate limiting for AI analysis endpoints
+const aiLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 20, // limit each IP to 20 requests per windowMs
+  message: { error: 'Too many AI analysis requests' }
+});
+
+router.use(aiLimiter);
 
 // Archivo local de respaldo cuando no hay MongoDB
 const DATA_DIR = path.join(process.cwd(), 'backend', 'data');
@@ -12,22 +23,48 @@ const STORE_FILE = path.join(DATA_DIR, 'analisis_store.json');
 
 async function ensureDataStore() {
   try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
+    // Validate paths to prevent directory traversal
+    const normalizedDataDir = path.resolve(DATA_DIR);
+    const normalizedStoreFile = path.resolve(STORE_FILE);
+    
+    // Ensure store file is within data directory
+    if (!normalizedStoreFile.startsWith(normalizedDataDir)) {
+      throw new Error('Invalid store file path');
+    }
+    
+    await fs.mkdir(normalizedDataDir, { recursive: true, mode: 0o755 });
+    
     try {
-      await fs.access(STORE_FILE);
+      await fs.access(normalizedStoreFile);
     } catch (_) {
-      await fs.writeFile(STORE_FILE, JSON.stringify([]), 'utf8');
+      await fs.writeFile(normalizedStoreFile, JSON.stringify([]), { 
+        encoding: 'utf8',
+        mode: 0o644
+      });
     }
   } catch (e) {
     console.error('No se pudo asegurar el data store local:', e);
+    throw e;
   }
 }
 
 router.all('/', async (req, res) => {
-  // CORS simple
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Secure CORS headers
+  const allowedOrigins = [
+    process.env.FRONTEND_URL || 'http://localhost:3000',
+    'http://localhost:3000',
+    'https://localhost:3000'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-CSRF-Token');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   // Si hay una URI de Mongo, nos conectamos; si no, usaremos el fallback de archivos
@@ -71,42 +108,60 @@ router.all('/', async (req, res) => {
     }
   }
 
-  // POST
+  // POST - Enhanced validation
   try {
     const payload = req.body || {};
-
-    // normalize base64 fields (leave as-is if already Buffer when using DB)
-    if (payload.heatmap && typeof payload.heatmap === 'string') {
-      // keep base64 string for local storage; DB path will convert to Buffer below
+    
+    // Validate payload structure
+    if (typeof payload !== 'object') {
+      return res.status(400).json({ error: 'Invalid payload format' });
     }
+    
+    // Validate required fields
+    const requiredFields = ['deviceId', 'cultivo'];
+    for (const field of requiredFields) {
+      if (!payload[field] || typeof payload[field] !== 'string') {
+        return res.status(400).json({ error: `Missing or invalid field: ${field}` });
+      }
+    }
+    
+    // Validate and sanitize base64 fields
+    if (payload.heatmap && typeof payload.heatmap === 'string') {
+      if (!isValidBase64(payload.heatmap)) {
+        return res.status(400).json({ error: 'Invalid heatmap format' });
+      }
+      // Limit base64 size (2MB when decoded)
+      if (payload.heatmap.length > 2.7 * 1024 * 1024) {
+        return res.status(400).json({ error: 'Heatmap too large' });
+      }
+    }
+    
     if (payload.image && typeof payload.image === 'string') {
-      // keep base64 string for local store
+      if (!isValidBase64(payload.image)) {
+        return res.status(400).json({ error: 'Invalid image format' });
+      }
+      // Limit base64 size (2MB when decoded)
+      if (payload.image.length > 2.7 * 1024 * 1024) {
+        return res.status(400).json({ error: 'Image too large' });
+      }
     }
 
     if (usingDb) {
-      // If heatmap/image are base64 strings, convert to Buffer for DB storage
+      // Convert validated base64 strings to Buffer for DB storage
       if (payload.heatmap && typeof payload.heatmap === 'string') {
         try { 
-          // Validate base64 format
-          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload.heatmap)) {
-            throw new Error('Invalid base64 format');
-          }
           payload.heatmap = Buffer.from(payload.heatmap, 'base64'); 
         } catch (e) { 
-          console.error('Invalid heatmap data:', e);
-          delete payload.heatmap;
+          console.error('Failed to process heatmap data:', e);
+          return res.status(400).json({ error: 'Invalid heatmap data' });
         }
       }
       if (payload.image && typeof payload.image === 'string') {
         try { 
-          // Validate base64 format
-          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload.image)) {
-            throw new Error('Invalid base64 format');
-          }
           payload.image = Buffer.from(payload.image, 'base64'); 
         } catch (e) { 
-          console.error('Invalid image data:', e);
-          delete payload.image;
+          console.error('Failed to process image data:', e);
+          return res.status(400).json({ error: 'Invalid image data' });
         }
       }
       const doc = new AnalisisIA(payload);
@@ -114,20 +169,78 @@ router.all('/', async (req, res) => {
       return res.status(201).json({ ok: true, id: doc._id });
     }
 
-    // Almacenamiento local: guardar objeto en el JSON
+    // Almacenamiento local seguro
     await ensureDataStore();
-    const raw = await fs.readFile(STORE_FILE, 'utf8');
-    const arr = JSON.parse(raw || '[]');
+    
+    let arr;
+    try {
+      const raw = await fs.readFile(STORE_FILE, 'utf8');
+      arr = JSON.parse(raw || '[]');
+      
+      // Validate parsed data
+      if (!Array.isArray(arr)) {
+        throw new Error('Invalid store format');
+      }
+    } catch (e) {
+      console.error('Error reading store file:', e);
+      arr = [];
+    }
+    
+    // Limit store size (keep only last 1000 records)
+    if (arr.length >= 1000) {
+      arr = arr.slice(-999);
+    }
+    
     const id = `${Date.now()}-${Math.floor(Math.random()*10000)}`;
-    const record = { id, createdAt: new Date().toISOString(), ...payload };
+    const record = { 
+      id, 
+      createdAt: new Date().toISOString(), 
+      deviceId: payload.deviceId,
+      cultivo: payload.cultivo,
+      ...(payload.heatmap && { heatmap: payload.heatmap }),
+      ...(payload.image && { image: payload.image })
+    };
+    
     arr.push(record);
-    await fs.writeFile(STORE_FILE, JSON.stringify(arr, null, 2), 'utf8');
+    
+    try {
+      await fs.writeFile(STORE_FILE, JSON.stringify(arr, null, 2), {
+        encoding: 'utf8',
+        mode: 0o644
+      });
+    } catch (e) {
+      console.error('Error writing store file:', e);
+      return res.status(500).json({ error: 'Failed to save analysis' });
+    }
+    
     return res.status(201).json({ ok: true, id });
   } catch (err) {
     console.error('/api/ia POST error:', err);
-    return res.status(500).json({ error: String(err) });
+    return res.status(500).json({ 
+      error: 'Analysis processing failed',
+      code: 'ANALYSIS_ERROR'
+    });
   }
 });
+
+// Utility function to validate base64
+function isValidBase64(str) {
+  if (typeof str !== 'string') return false;
+  
+  // Check basic base64 pattern
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(str)) return false;
+  
+  // Check length (must be multiple of 4)
+  if (str.length % 4 !== 0) return false;
+  
+  try {
+    // Try to decode to validate
+    Buffer.from(str, 'base64');
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // DELETE route for removing analysis
 router.delete('/:id', async (req, res) => {
@@ -146,6 +259,11 @@ router.delete('/:id', async (req, res) => {
 
   try {
     const { id } = req.params;
+    
+    // Validate ID format
+    if (!id || typeof id !== 'string' || !/^[a-zA-Z0-9-]+$/.test(id)) {
+      return res.status(400).json({ error: 'Invalid ID format' });
+    }
     
     if (usingDb) {
       const deleted = await AnalisisIA.findByIdAndDelete(id);
@@ -169,7 +287,10 @@ router.delete('/:id', async (req, res) => {
     }
   } catch (err) {
     console.error('/api/ia DELETE error:', err);
-    return res.status(500).json({ error: String(err) });
+    return res.status(500).json({ 
+      error: 'Delete operation failed',
+      code: 'DELETE_ERROR'
+    });
   }
 });
 
