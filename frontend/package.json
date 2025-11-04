@@ -23,9 +23,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "chmod +x node_modules/.bin/vite && vite build",
+    "build": "npx vite build",
     "start": "vite",
-    "preview": "vite preview",
-    "postinstall": "chmod +x node_modules/.bin/vite || true"
+    "preview": "vite preview"
   }
 }
