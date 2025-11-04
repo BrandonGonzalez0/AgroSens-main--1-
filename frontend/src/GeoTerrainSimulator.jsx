@@ -10,6 +10,9 @@ const GeoTerrainSimulator = ({ isOpen, onClose }) => {
   const [sensors, setSensors] = useState({});
   const [showSensorModal, setShowSensorModal] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
+  const [customCorners, setCustomCorners] = useState([]);
+  const [isSelectingCorners, setIsSelectingCorners] = useState(false);
   const mapRef = useRef(null);
   const leafletMapRef = useRef(null);
 
@@ -174,7 +177,51 @@ const GeoTerrainSimulator = ({ isOpen, onClose }) => {
           </div>
 
           {step === 'form' ? (
-            <GeoTerrainForm onSubmit={createGeoreferencedTerrain} />
+            <GeoTerrainForm 
+              onSubmit={createGeoreferencedTerrain} 
+              onCustomMode={() => {
+                setCustomMode(true);
+                setStep('custom');
+                setCustomCorners([]);
+              }}
+            />
+          ) : step === 'custom' ? (
+            <CustomTerrainMap 
+              mapLoaded={mapLoaded}
+              mapRef={mapRef}
+              leafletMapRef={leafletMapRef}
+              customCorners={customCorners}
+              setCustomCorners={setCustomCorners}
+              originalTerrain={originalTerrain}
+              onCreateTerrain={(terrainData) => {
+                console.log('Creando terreno personalizado', terrainData);
+                if (leafletMapRef.current) {
+                  leafletMapRef.current.remove();
+                  leafletMapRef.current = null;
+                }
+                setTerrain(terrainData);
+                setStep('map');
+                setCustomMode(false);
+                setSensors({});
+                setSelectedGrid(null);
+              }}
+              onBack={() => {
+                console.log('Volviendo desde custom mode');
+                if (leafletMapRef.current) {
+                  leafletMapRef.current.remove();
+                  leafletMapRef.current = null;
+                }
+                if (originalTerrain) {
+                  setTerrain(originalTerrain);
+                  setStep('map');
+                } else {
+                  setStep('form');
+                }
+                setCustomMode(false);
+                setCustomCorners([]);
+                setOriginalTerrain(null);
+              }}
+            />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               <div className="lg:col-span-3">
@@ -187,6 +234,20 @@ const GeoTerrainSimulator = ({ isOpen, onClose }) => {
                   mapLoaded={mapLoaded}
                   mapRef={mapRef}
                   leafletMapRef={leafletMapRef}
+                  isSelectingCorners={isSelectingCorners}
+                  customCorners={customCorners}
+                  setCustomCorners={setCustomCorners}
+                  onFinishCustomSelection={(newTerrain) => {
+                    setTerrain(newTerrain);
+                    setIsSelectingCorners(false);
+                    setCustomCorners([]);
+                    setSensors({});
+                    setSelectedGrid(null);
+                  }}
+                  onCancelCustomSelection={() => {
+                    setIsSelectingCorners(false);
+                    setCustomCorners([]);
+                  }}
                 />
               </div>
               <div className="lg:col-span-1">
@@ -199,6 +260,12 @@ const GeoTerrainSimulator = ({ isOpen, onClose }) => {
                   onExport={exportToGeoJSON}
                   getGridRecommendation={getGridRecommendation}
                   gridToGeo={gridToGeo}
+                  onCustomMode={() => {
+                    console.log('Activando modo selección de esquinas');
+                    setIsSelectingCorners(true);
+                    setCustomCorners([]);
+                    setSelectedGrid(null);
+                  }}
                 />
               </div>
             </div>
@@ -224,7 +291,7 @@ const GeoTerrainSimulator = ({ isOpen, onClose }) => {
   );
 };
 
-const GeoTerrainForm = ({ onSubmit }) => {
+const GeoTerrainForm = ({ onSubmit, onCustomMode }) => {
   const [formData, setFormData] = useState({
     name: '',
     centerLat: '',
@@ -391,20 +458,32 @@ const GeoTerrainForm = ({ onSubmit }) => {
           </div>
         </div>
 
-        <motion.button
-          type="submit"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl"
-        >
-          🌍 Crear Terreno GPS
-        </motion.button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <motion.button
+            type="submit"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl"
+          >
+            🌍 Crear Terreno GPS
+          </motion.button>
+          
+          <motion.button
+            type="button"
+            onClick={onCustomMode}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl"
+          >
+            📍 Mapa Personalizado
+          </motion.button>
+        </div>
       </form>
     </div>
   );
 };
 
-const GeoTerrainMap = ({ terrain, sensors, selectedGrid, onGridClick, getGridRecommendation, mapLoaded, mapRef, leafletMapRef }) => {
+const GeoTerrainMap = ({ terrain, sensors, selectedGrid, onGridClick, getGridRecommendation, mapLoaded, mapRef, leafletMapRef, isSelectingCorners, customCorners, setCustomCorners, onFinishCustomSelection, onCancelCustomSelection }) => {
   useEffect(() => {
     if (mapLoaded && terrain && mapRef.current && !leafletMapRef.current) {
       setTimeout(() => initializeMap(), 100);
@@ -418,6 +497,79 @@ const GeoTerrainMap = ({ terrain, sensors, selectedGrid, onGridClick, getGridRec
       setTimeout(() => initializeMap(), 100);
     }
   }, [sensors]);
+
+  useEffect(() => {
+    if (leafletMapRef.current && isSelectingCorners) {
+      updateCustomMarkers();
+    }
+  }, [customCorners]);
+
+  useEffect(() => {
+    if (leafletMapRef.current && isSelectingCorners) {
+      const map = leafletMapRef.current;
+      
+      // Limpiar el mapa de elementos anteriores
+      map.eachLayer((layer) => {
+        if (layer instanceof window.L.Rectangle || layer instanceof window.L.Marker) {
+          map.removeLayer(layer);
+        }
+      });
+      
+      const handleMapClick = (e) => {
+        if (customCorners.length < 4) {
+          const newCorner = {
+            lat: e.latlng.lat,
+            lng: e.latlng.lng,
+            index: customCorners.length
+          };
+          setCustomCorners(prev => [...prev, newCorner]);
+        }
+      };
+      
+      map.off('click'); // Remover handlers anteriores
+      map.on('click', handleMapClick);
+      
+      return () => {
+        map.off('click', handleMapClick);
+      };
+    }
+  }, [isSelectingCorners, customCorners.length]);
+
+  const updateCustomMarkers = () => {
+    if (!leafletMapRef.current || !window.L) return;
+
+    const map = leafletMapRef.current;
+    
+    // Remover marcadores anteriores y elementos del terreno original
+    map.eachLayer((layer) => {
+      if (layer.options && (layer.options.isCustomMarker || layer instanceof window.L.Rectangle)) {
+        map.removeLayer(layer);
+      }
+    });
+
+    // Agregar marcadores para cada esquina
+    customCorners.forEach((corner, index) => {
+      window.L.marker([corner.lat, corner.lng], {
+        icon: window.L.divIcon({
+          html: `<div style="background: #3B82F6; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold;">${index + 1}</div>`,
+          className: 'custom-corner-marker',
+          iconSize: [24, 24]
+        }),
+        isCustomMarker: true
+      }).addTo(map);
+    });
+
+    // Si tenemos 4 esquinas, dibujar el polígono
+    if (customCorners.length === 4) {
+      const polygonCoords = customCorners.map(corner => [corner.lat, corner.lng]);
+      window.L.polygon(polygonCoords, {
+        color: '#3B82F6',
+        weight: 2,
+        fillOpacity: 0.2,
+        isCustomMarker: true
+      }).addTo(map);
+    }
+  };
 
 
 
@@ -435,23 +587,50 @@ const GeoTerrainMap = ({ terrain, sensors, selectedGrid, onGridClick, getGridRec
         zoomControl: true
       });
       
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      // Base layers
+      const osmLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
-      }).addTo(map);
-
-      const bounds = [
-        [terrain.bounds.south, terrain.bounds.west],
-        [terrain.bounds.north, terrain.bounds.east]
-      ];
+      });
       
-      window.L.rectangle(bounds, {
-        color: '#3B82F6',
-        weight: 2,
-        fillOpacity: 0.1
-      }).addTo(map);
+      const satelliteLayer = window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '© Esri, Maxar, Earthstar Geographics',
+        maxZoom: 19
+      });
+      
+      const hybridLayer = window.L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+        attribution: '© Google',
+        maxZoom: 19
+      });
 
-      drawGrid(map, terrain);
+      // Add default layer
+      satelliteLayer.addTo(map);
+      
+      // Layer control
+      const baseLayers = {
+        '🛰️ Satélite': satelliteLayer,
+        '🗺️ Mapa': osmLayer,
+        '🌍 Híbrido': hybridLayer
+      };
+      
+      window.L.control.layers(baseLayers).addTo(map);
+
+      if (!isSelectingCorners && !terrain.isCustom) {
+        const bounds = [
+          [terrain.bounds.south, terrain.bounds.west],
+          [terrain.bounds.north, terrain.bounds.east]
+        ];
+        
+        window.L.rectangle(bounds, {
+          color: '#3B82F6',
+          weight: 2,
+          fillOpacity: 0.1
+        }).addTo(map);
+      }
+
+      if (!isSelectingCorners) {
+        drawGrid(map, terrain);
+      }
       
       leafletMapRef.current = map;
       map.invalidateSize();
@@ -467,6 +646,16 @@ const GeoTerrainMap = ({ terrain, sensors, selectedGrid, onGridClick, getGridRec
     const latStep = (bounds.north - bounds.south) / gridsY;
     const lngStep = (bounds.east - bounds.west) / gridsX;
 
+    // Si es un terreno personalizado, dibujar el polígono primero
+    if (terrain.isCustom && terrain.corners) {
+      const polygonCoords = terrain.corners.map(corner => [corner.lat, corner.lng]);
+      window.L.polygon(polygonCoords, {
+        color: '#3B82F6',
+        weight: 2,
+        fillOpacity: 0.1
+      }).addTo(map);
+    }
+
     for (let x = 0; x < gridsX; x++) {
       for (let y = 0; y < gridsY; y++) {
         const gridId = `${x}-${y}`;
@@ -479,29 +668,56 @@ const GeoTerrainMap = ({ terrain, sensors, selectedGrid, onGridClick, getGridRec
         const hasSensor = sensors[gridId];
         const recommendation = getGridRecommendation(gridId);
 
-        const rectangle = window.L.rectangle(gridBounds, {
-          color: selectedGrid === gridId ? '#3B82F6' : '#ccc',
-          weight: selectedGrid === gridId ? 2 : 1,
-          fillColor: hasSensor ? (recommendation ? '#10B981' : '#F59E0B') : 'transparent',
-          fillOpacity: hasSensor ? 0.3 : 0
-        }).addTo(map);
-
-        if (hasSensor) {
+        // Para terrenos personalizados, verificar si la cuadrícula está dentro del polígono
+        let isInsidePolygon = true;
+        if (terrain.isCustom && terrain.corners) {
           const centerLat = (south + north) / 2;
           const centerLng = (west + east) / 2;
-          
-          window.L.marker([centerLat, centerLng], {
-            icon: window.L.divIcon({
-              html: '📡',
-              className: 'sensor-marker',
-              iconSize: [20, 20]
-            })
-          }).addTo(map);
+          isInsidePolygon = pointInPolygon([centerLat, centerLng], terrain.corners.map(c => [c.lat, c.lng]));
         }
 
-        rectangle.on('click', () => onGridClick(gridId));
+        if (isInsidePolygon) {
+          const rectangle = window.L.rectangle(gridBounds, {
+            color: selectedGrid === gridId ? '#3B82F6' : '#ccc',
+            weight: selectedGrid === gridId ? 2 : 1,
+            fillColor: hasSensor ? (recommendation ? '#10B981' : '#F59E0B') : 'transparent',
+            fillOpacity: hasSensor ? 0.3 : 0
+          }).addTo(map);
+
+          if (hasSensor) {
+            const centerLat = (south + north) / 2;
+            const centerLng = (west + east) / 2;
+            
+            window.L.marker([centerLat, centerLng], {
+              icon: window.L.divIcon({
+                html: '📡',
+                className: 'sensor-marker',
+                iconSize: [20, 20]
+              })
+            }).addTo(map);
+          }
+
+          rectangle.on('click', () => onGridClick(gridId));
+        }
       }
     }
+  };
+
+  // Función para verificar si un punto está dentro de un polígono
+  const pointInPolygon = (point, polygon) => {
+    const [x, y] = point;
+    let inside = false;
+    
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const [xi, yi] = polygon[i];
+      const [xj, yj] = polygon[j];
+      
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+    
+    return inside;
   };
 
   if (!terrain) return null;
@@ -513,7 +729,7 @@ const GeoTerrainMap = ({ terrain, sensors, selectedGrid, onGridClick, getGridRec
           🌍 {terrain.name}
         </h3>
         <div className="text-sm text-gray-600 dark:text-gray-300">
-          GPS: {terrain.centerLat.toFixed(6)}, {terrain.centerLng.toFixed(6)}
+          {terrain.isCustom ? 'Personalizado' : `GPS: ${terrain.centerLat.toFixed(6)}, ${terrain.centerLng.toFixed(6)}`}
         </div>
       </div>
 
@@ -534,33 +750,42 @@ const GeoTerrainMap = ({ terrain, sensors, selectedGrid, onGridClick, getGridRec
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-4 text-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-blue-500 bg-opacity-30 border border-blue-500 rounded"></div>
-          <span className="text-gray-600 dark:text-gray-300">Seleccionada</span>
+      {isSelectingCorners ? (
+        <CustomSelectionOverlay 
+          customCorners={customCorners}
+          terrain={terrain}
+          onFinish={onFinishCustomSelection}
+          onCancel={onCancelCustomSelection}
+        />
+      ) : (
+        <div className="mt-4 flex flex-wrap gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-blue-500 bg-opacity-30 border border-blue-500 rounded"></div>
+            <span className="text-gray-600 dark:text-gray-300">Seleccionada</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-green-500 bg-opacity-30 border border-gray-300 rounded"></div>
+            <span className="text-gray-600 dark:text-gray-300">Con cultivo recomendado</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-yellow-500 bg-opacity-30 border border-gray-300 rounded"></div>
+            <span className="text-gray-600 dark:text-gray-300">Con sensor (sin cultivo)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📡</span>
+            <span className="text-gray-600 dark:text-gray-300">Sensor GPS</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 border border-gray-300 rounded bg-transparent"></div>
+            <span className="text-gray-600 dark:text-gray-300">Vacía</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-500 bg-opacity-30 border border-gray-300 rounded"></div>
-          <span className="text-gray-600 dark:text-gray-300">Con cultivo recomendado</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-yellow-500 bg-opacity-30 border border-gray-300 rounded"></div>
-          <span className="text-gray-600 dark:text-gray-300">Con sensor (sin cultivo)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📡</span>
-          <span className="text-gray-600 dark:text-gray-300">Sensor GPS</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 border border-gray-300 rounded bg-transparent"></div>
-          <span className="text-gray-600 dark:text-gray-300">Vacía</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
 
-const GeoTerrainPanel = ({ terrain, selectedGrid, sensors, onAddSensor, onBack, onExport, getGridRecommendation, gridToGeo }) => {
+const GeoTerrainPanel = ({ terrain, selectedGrid, sensors, onAddSensor, onBack, onExport, getGridRecommendation, gridToGeo, onCustomMode }) => {
   const sensor = selectedGrid ? sensors[selectedGrid] : null;
   const recommendation = selectedGrid ? getGridRecommendation(selectedGrid) : null;
   const geoCoords = selectedGrid ? gridToGeo(selectedGrid) : null;
@@ -603,13 +828,25 @@ const GeoTerrainPanel = ({ terrain, selectedGrid, sensors, onAddSensor, onBack, 
           </div>
         </div>
 
-        <button
-          onClick={onExport}
-          disabled={Object.keys(sensors).length === 0}
-          className="w-full mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white rounded-lg transition-all"
-        >
-          📄 Exportar GeoJSON
-        </button>
+        <div className="mt-4 space-y-2">
+          <button
+            onClick={onExport}
+            disabled={Object.keys(sensors).length === 0}
+            className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white rounded-lg transition-all"
+          >
+            📄 Exportar GeoJSON
+          </button>
+          
+          <button
+            onClick={() => {
+              console.log('Botón mapa personalizado clickeado');
+              onCustomMode();
+            }}
+            className="w-full px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg transition-all"
+          >
+            📍 Mapa Personalizado
+          </button>
+        </div>
       </div>
 
       {selectedGrid ? (
@@ -690,6 +927,419 @@ const GeoTerrainPanel = ({ terrain, selectedGrid, sensors, onAddSensor, onBack, 
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+const CustomTerrainMap = ({ mapLoaded, mapRef, leafletMapRef, customCorners, setCustomCorners, onCreateTerrain, onBack }) => {
+  const [terrainName, setTerrainName] = useState('');
+  const [gridSize, setGridSize] = useState('10');
+
+  useEffect(() => {
+    if (mapLoaded && mapRef.current && !leafletMapRef.current) {
+      setTimeout(() => initializeCustomMap(), 100);
+    }
+  }, [mapLoaded]);
+
+  useEffect(() => {
+    if (mapLoaded && mapRef.current) {
+      setTimeout(() => initializeCustomMap(), 100);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (leafletMapRef.current && customCorners.length > 0) {
+      updateCustomMap();
+    }
+  }, [customCorners]);
+
+  const initializeCustomMap = () => {
+    if (!window.L || !mapRef.current) return;
+
+    try {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+      }
+
+      const map = window.L.map(mapRef.current, {
+        center: [-12.046374, -77.042793], // Lima, Peru por defecto
+        zoom: 16,
+        zoomControl: true
+      });
+      
+      const satelliteLayer = window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '© Esri, Maxar, Earthstar Geographics',
+        maxZoom: 19
+      });
+      
+      satelliteLayer.addTo(map);
+      
+      // Click handler para el mapa
+      const handleMapClick = (e) => {
+        if (isSelectingCorners && customCorners.length < 4) {
+          const newCorner = {
+            lat: e.latlng.lat,
+            lng: e.latlng.lng,
+            index: customCorners.length
+          };
+          setCustomCorners(prev => [...prev, newCorner]);
+        }
+      };
+      
+      map.on('click', handleMapClick);
+      
+      leafletMapRef.current = map;
+      map.invalidateSize();
+    } catch (error) {
+      console.error('Error initializing custom map:', error);
+    }
+  };
+
+  const updateCustomMap = () => {
+    if (!leafletMapRef.current || !window.L) return;
+
+    const map = leafletMapRef.current;
+    
+    // Limpiar marcadores anteriores
+    map.eachLayer((layer) => {
+      if (layer instanceof window.L.Marker || layer instanceof window.L.Polygon) {
+        map.removeLayer(layer);
+      }
+    });
+
+    // Agregar marcadores para cada esquina
+    customCorners.forEach((corner, index) => {
+      window.L.marker([corner.lat, corner.lng], {
+        icon: window.L.divIcon({
+          html: `<div style="background: #3B82F6; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold;">${index + 1}</div>`,
+          className: 'custom-corner-marker',
+          iconSize: [24, 24]
+        })
+      }).addTo(map);
+    });
+
+    // Si tenemos 4 esquinas, dibujar el polígono
+    if (customCorners.length === 4) {
+      const polygonCoords = customCorners.map(corner => [corner.lat, corner.lng]);
+      window.L.polygon(polygonCoords, {
+        color: '#3B82F6',
+        weight: 2,
+        fillOpacity: 0.2
+      }).addTo(map);
+    }
+  };
+
+  const resetCorners = () => {
+    setCustomCorners([]);
+    if (leafletMapRef.current) {
+      leafletMapRef.current.eachLayer((layer) => {
+        if (layer instanceof window.L.Marker || layer instanceof window.L.Polygon) {
+          leafletMapRef.current.removeLayer(layer);
+        }
+      });
+    }
+  };
+
+  const createCustomTerrain = () => {
+    if (customCorners.length !== 4 || !terrainName.trim()) {
+      showNotification('error', 'Error', 'Necesitas 4 esquinas y un nombre para el terreno');
+      return;
+    }
+
+    // Calcular bounds del polígono
+    const lats = customCorners.map(c => c.lat);
+    const lngs = customCorners.map(c => c.lng);
+    
+    const bounds = {
+      north: Math.max(...lats),
+      south: Math.min(...lats),
+      east: Math.max(...lngs),
+      west: Math.min(...lngs)
+    };
+
+    // Calcular centro
+    const centerLat = (bounds.north + bounds.south) / 2;
+    const centerLng = (bounds.east + bounds.west) / 2;
+
+    // Calcular dimensiones aproximadas
+    const width = Math.abs(bounds.east - bounds.west) * 111320 * Math.cos(centerLat * Math.PI / 180);
+    const length = Math.abs(bounds.north - bounds.south) * 111320;
+
+    const gridsX = Math.ceil(width / parseFloat(gridSize));
+    const gridsY = Math.ceil(length / parseFloat(gridSize));
+
+    const customTerrain = {
+      id: Date.now(),
+      name: terrainName,
+      centerLat,
+      centerLng,
+      width,
+      length,
+      gridSize: parseFloat(gridSize),
+      gridsX,
+      gridsY,
+      bounds,
+      corners: customCorners,
+      isCustom: true,
+      isGeoreferenced: true,
+      createdAt: new Date().toISOString()
+    };
+
+    onCreateTerrain(customTerrain);
+    showNotification('success', 'Terreno personalizado creado', `${terrainName} con ${gridsX}x${gridsY} cuadrículas`);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <div className="text-6xl mb-4">📍</div>
+        <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
+          Crear Mapa Personalizado
+        </h3>
+        <p className="text-gray-600 dark:text-gray-300">
+          Haz click en las 4 esquinas de tu terreno en el mapa
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-3">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                🗺️ Selecciona las 4 esquinas
+              </h3>
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                Esquinas: {customCorners.length}/4
+              </div>
+            </div>
+
+            <div 
+              ref={mapRef}
+              className="w-full h-96 rounded-lg border border-gray-300 dark:border-gray-600 cursor-crosshair"
+              style={{ minHeight: '400px', width: '100%' }}
+            >
+              {!mapLoaded && (
+                <div className="flex items-center justify-center h-full bg-gray-100 dark:bg-gray-700 rounded-lg">
+                  <div className="text-center">
+                    <div className="text-4xl mb-2">🗺️</div>
+                    <p className="text-gray-600 dark:text-gray-300">Cargando mapa...</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</div>
+                <span className="text-gray-600 dark:text-gray-300">Esquina 1</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</div>
+                <span className="text-gray-600 dark:text-gray-300">Esquina 2</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</div>
+                <span className="text-gray-600 dark:text-gray-300">Esquina 3</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">4</div>
+                <span className="text-gray-600 dark:text-gray-300">Esquina 4</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-1">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+              ⚙️ Configuración
+            </h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Nombre del terreno
+                </label>
+                <input
+                  type="text"
+                  value={terrainName}
+                  onChange={(e) => setTerrainName(e.target.value)}
+                  className="w-full p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  placeholder="Mi terreno personalizado"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Tamaño de cuadrícula
+                </label>
+                <select
+                  value={gridSize}
+                  onChange={(e) => setGridSize(e.target.value)}
+                  className="w-full p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="5">5x5m</option>
+                  <option value="10">10x10m</option>
+                  <option value="20">20x20m</option>
+                  <option value="25">25x25m</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-medium text-gray-700 dark:text-gray-300">Esquinas seleccionadas:</h4>
+                {customCorners.map((corner, index) => (
+                  <div key={index} className="text-xs text-gray-600 dark:text-gray-400 font-mono bg-gray-50 dark:bg-gray-700 p-2 rounded">
+                    {index + 1}: {corner.lat.toFixed(6)}, {corner.lng.toFixed(6)}
+                  </div>
+                ))}
+                {customCorners.length === 0 && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                    Haz click en el mapa para agregar esquinas
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  onClick={resetCorners}
+                  className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  🗑️ Limpiar esquinas
+                </button>
+                
+                <button
+                  onClick={createCustomTerrain}
+                  disabled={customCorners.length !== 4 || !terrainName.trim()}
+                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+                >
+                  ✅ Crear terreno
+                </button>
+                
+                <button
+                  onClick={onBack}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  ← Volver
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CustomSelectionOverlay = ({ customCorners, terrain, onFinish, onCancel }) => {
+  const [terrainName, setTerrainName] = useState(terrain.name + ' - Personalizado');
+  const [gridSize, setGridSize] = useState(terrain.gridSize.toString());
+
+  const createCustomTerrain = () => {
+    if (customCorners.length !== 4) {
+      showNotification('error', 'Error', 'Necesitas seleccionar 4 esquinas');
+      return;
+    }
+
+    const lats = customCorners.map(c => c.lat);
+    const lngs = customCorners.map(c => c.lng);
+    
+    const bounds = {
+      north: Math.max(...lats),
+      south: Math.min(...lats),
+      east: Math.max(...lngs),
+      west: Math.min(...lngs)
+    };
+
+    const centerLat = (bounds.north + bounds.south) / 2;
+    const centerLng = (bounds.east + bounds.west) / 2;
+    const width = Math.abs(bounds.east - bounds.west) * 111320 * Math.cos(centerLat * Math.PI / 180);
+    const length = Math.abs(bounds.north - bounds.south) * 111320;
+    const gridsX = Math.ceil(width / parseFloat(gridSize));
+    const gridsY = Math.ceil(length / parseFloat(gridSize));
+
+    const customTerrain = {
+      ...terrain,
+      id: Date.now(),
+      name: terrainName,
+      centerLat,
+      centerLng,
+      width,
+      length,
+      gridSize: parseFloat(gridSize),
+      gridsX,
+      gridsY,
+      bounds,
+      corners: customCorners,
+      isCustom: true,
+      createdAt: new Date().toISOString()
+    };
+
+    onFinish(customTerrain);
+    showNotification('success', 'Área personalizada creada', `${terrainName} con ${gridsX}x${gridsY} cuadrículas`);
+  };
+
+  return (
+    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="font-semibold text-blue-800 dark:text-blue-200">
+          📍 Seleccionar Área Personalizada ({customCorners.length}/4)
+        </h4>
+        <button
+          onClick={onCancel}
+          className="text-red-600 hover:text-red-700 text-sm"
+        >
+          ✕ Cancelar
+        </button>
+      </div>
+      
+      <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
+        Haz click en las 4 esquinas del área que quieres cultivar
+      </p>
+
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">
+            Nombre
+          </label>
+          <input
+            type="text"
+            value={terrainName}
+            onChange={(e) => setTerrainName(e.target.value)}
+            className="w-full p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">
+            Grid
+          </label>
+          <select
+            value={gridSize}
+            onChange={(e) => setGridSize(e.target.value)}
+            className="w-full p-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          >
+            <option value="5">5x5m</option>
+            <option value="10">10x10m</option>
+            <option value="20">20x20m</option>
+            <option value="25">25x25m</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={createCustomTerrain}
+          disabled={customCorners.length !== 4}
+          className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:bg-gray-400"
+        >
+          ✅ Crear Área
+        </button>
+        <button
+          onClick={() => setCustomCorners && setCustomCorners([])}
+          className="px-3 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+        >
+          🗑️ Limpiar
+        </button>
+      </div>
     </div>
   );
 };
@@ -792,3 +1442,6 @@ const SensorModal = ({ gridId, existingSensor, geoCoords, onClose, onSave }) => 
 };
 
 export default GeoTerrainSimulator;
+
+// Agregar import de useState al inicio del archivo si no está
+// import React, { useState, useEffect, useRef } from 'react';

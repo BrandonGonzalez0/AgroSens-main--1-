@@ -414,7 +414,7 @@ function App() {
         </div>
 
         <div className="max-w-7xl mx-auto px-6 pb-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12">
             <motion.button
               onClick={() => setShowCameraAnalysis(true)}
               whileHover={{ scale: 1.02, y: -2 }}
@@ -480,6 +480,23 @@ function App() {
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Seguimiento</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300">Seguimiento paso a paso de cultivos</p>
                 <div className="mt-4 text-xs text-orange-600 dark:text-orange-400 font-medium">Gestionar →</div>
+              </div>
+            </motion.button>
+
+            <motion.button
+              onClick={() => setShowGeoTerrainSimulator(true)}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-cyan-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative">
+                <div className="w-12 h-12 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl">🌍</span>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Terreno GPS</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Mapeo satelital con coordenadas reales</p>
+                <div className="mt-4 text-xs text-teal-600 dark:text-teal-400 font-medium">Mapear →</div>
               </div>
             </motion.button>
           </div>
