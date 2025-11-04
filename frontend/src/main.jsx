@@ -19,8 +19,12 @@ import "./index.css"; // Si tienes un archivo CSS global
 })();
 
 const rootElement = document.getElementById("app"); // El contenedor en index.html
-ReactDOM.createRoot(rootElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+if (rootElement) {
+  ReactDOM.createRoot(rootElement).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+} else {
+  console.error('No se encontró el elemento con id "app"');
+}

@@ -1,7 +1,7 @@
 // Secure API utility functions
 class APIClient {
   constructor() {
-    this.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     this.csrfToken = null;
   }
 

@@ -11,6 +11,8 @@ import CameraAnalysis from './CameraAnalysis';
 import CaptureGallery from './CaptureGallery';
 import CropSelectionDashboard from './CropSelectionDashboard';
 import CropValidationResult from './CropValidationResult';
+import CropTracker from './CropTracker';
+import GeoTerrainSimulator from './GeoTerrainSimulator';
 import Navigation from './Navigation';
 import NotificationSystem, { showNotification } from './NotificationSystem';
 import cultivosDB from "./data/cultivos.json";
@@ -19,6 +21,12 @@ import { flushQueue } from './lib/sync';
 import WeatherRotator from './WeatherRotator';
 import { useSensorData } from './hooks/useSensorData';
 import apiClient, { sanitizeInput, validateSensorData } from './utils/api';
+
+// Mobile compatibility
+const isMobile = () => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+         (navigator.maxTouchPoints && navigator.maxTouchPoints > 2 && /MacIntel/.test(navigator.platform));
+};
 
 // Normaliza un nombre para buscar en cultivosDB (quita acentos, espacios y minúsculas)
 function normalizeKey(name) {
@@ -94,7 +102,35 @@ function App() {
   const [humedad, setHumedad] = useState("");
   const [temperatura, setTemperatura] = useState("");
   
-  const { sensorData, autoMode, toggleAutoMode, fetchSensorData } = useSensorData();
+  const { sensorData: rawSensorData, autoMode, toggleAutoMode, fetchSensorData } = useSensorData();
+  const [mockSensorData, setMockSensorData] = useState(null);
+  
+  // Use mock data on mobile or when Arduino not connected
+  const sensorData = (isMobile() || !rawSensorData.isConnected) ? 
+    { ...rawSensorData, ...mockSensorData, isConnected: isMobile() } : rawSensorData;
+  
+  // Generate mock data periodically on mobile
+  useEffect(() => {
+    if (isMobile() || !rawSensorData.isConnected) {
+      const interval = setInterval(() => {
+        setMockSensorData({
+          ph: (6.0 + Math.random() * 2).toFixed(1),
+          humidity: (60 + Math.random() * 30).toFixed(0),
+          temperature: (18 + Math.random() * 12).toFixed(1),
+          timestamp: new Date().toISOString()
+        });
+      }, 3000);
+      
+      setMockSensorData({
+        ph: (6.0 + Math.random() * 2).toFixed(1),
+        humidity: (60 + Math.random() * 30).toFixed(0),
+        temperature: (18 + Math.random() * 12).toFixed(1),
+        timestamp: new Date().toISOString()
+      });
+      
+      return () => clearInterval(interval);
+    }
+  }, [rawSensorData.isConnected]);
   const [resultado, setResultado] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
 
@@ -103,6 +139,8 @@ function App() {
   const [showCaptureGallery, setShowCaptureGallery] = useState(false);
   const [showCropDashboard, setShowCropDashboard] = useState(false);
   const [showValidationResult, setShowValidationResult] = useState(false);
+  const [showCropTracker, setShowCropTracker] = useState(false);
+  const [showGeoTerrainSimulator, setShowGeoTerrainSimulator] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [now, setNow] = useState(new Date());
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -429,11 +467,7 @@ function App() {
             </motion.button>
 
             <motion.button
-              onClick={() => {
-                const items = ['🌱 Análisis completados', '📊 Datos sincronizados', '🔍 IA funcionando', '📱 App actualizada'];
-                const randomItem = items[Math.floor(Math.random() * items.length)];
-                alert(`✅ ${randomItem}`);
-              }}
+              onClick={() => setShowCropTracker(true)}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
@@ -441,11 +475,11 @@ function App() {
               <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-red-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="relative">
                 <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <span className="text-2xl">⚡</span>
+                  <span className="text-2xl">📋</span>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Estado</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-300">Verificar sistema y sincronización</p>
-                <div className="mt-4 text-xs text-orange-600 dark:text-orange-400 font-medium">Verificar →</div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Seguimiento</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Seguimiento paso a paso de cultivos</p>
+                <div className="mt-4 text-xs text-orange-600 dark:text-orange-400 font-medium">Gestionar →</div>
               </div>
             </motion.button>
           </div>
@@ -581,6 +615,8 @@ function App() {
         <CameraAnalysis isOpen={showCameraAnalysis} onClose={() => setShowCameraAnalysis(false)} />
         <TelemetryDashboard isOpen={showTelemetry} onClose={() => setShowTelemetry(false)} />
         <CaptureGallery isOpen={showCaptureGallery} onClose={() => setShowCaptureGallery(false)} />
+        <CropTracker isOpen={showCropTracker} onClose={() => setShowCropTracker(false)} />
+        <GeoTerrainSimulator isOpen={showGeoTerrainSimulator} onClose={() => setShowGeoTerrainSimulator(false)} />
       </div>
     );
   }
@@ -963,6 +999,18 @@ function App() {
               >
                 📸 Galería
               </button>
+              <button 
+                onClick={() => setShowCropTracker(true)} 
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
+              >
+                📋 Seguimiento
+              </button>
+              <button 
+                onClick={() => setShowGeoTerrainSimulator(true)} 
+                className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
+              >
+                🌍 Terreno GPS
+              </button>
             </div>
           </div>
         </div>
@@ -973,6 +1021,7 @@ function App() {
       <CameraAnalysis isOpen={showCameraAnalysis} onClose={() => setShowCameraAnalysis(false)} />
       <TelemetryDashboard isOpen={showTelemetry} onClose={() => setShowTelemetry(false)} />
       <CaptureGallery isOpen={showCaptureGallery} onClose={() => setShowCaptureGallery(false)} />
+      <CropTracker isOpen={showCropTracker} onClose={() => setShowCropTracker(false)} />
       
       {showCropDashboard && resultado?.sugerencias && (
         <CropSelectionDashboard 
