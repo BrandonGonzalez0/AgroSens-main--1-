@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import cropMaturityAnalyzer from './lib/cropMaturityLibrary';
 import pestIdentificationAI from './lib/pestIdentificationLibrary';
 import PestAlert from './PestAlert';
+import { showNotification } from './NotificationSystem';
 
 const CameraAnalysis = ({ isOpen, onClose }) => {
   const [analyzing, setAnalyzing] = useState(false);
@@ -75,26 +76,51 @@ const CameraAnalysis = ({ isOpen, onClose }) => {
   };
 
   const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current) {
+      alert('Cámara no disponible. Asegúrate de que la cámara esté funcionando.');
+      return;
+    }
     
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     
+    // Validate video dimensions
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      alert('Error: La cámara no está transmitiendo correctamente. Intenta recargar la página.');
+      return;
+    }
+    
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
     
-    const imageData = canvas.toDataURL('image/jpeg', 0.8);
-    setCapturedImage(imageData);
+    try {
+      ctx.drawImage(video, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      
+      // Validate that we actually captured something
+      if (imageData.length < 1000) {
+        alert('Error al capturar la imagen. Intenta de nuevo.');
+        return;
+      }
+      
+      setCapturedImage(imageData);
+    } catch (error) {
+      console.error('Error capturing photo:', error);
+      alert('Error al capturar la foto. Verifica que la cámara funcione correctamente.');
+    }
   };
 
   const analyzeImage = async () => {
-    if (!capturedImage) return;
+    if (!capturedImage) {
+      alert('Primero debes capturar una imagen.');
+      return;
+    }
     
     setAnalyzing(true);
     setAnalysisResult(null);
     setDangerAlert(null);
+    setPestAlert(null);
 
     try {
       // Create image element for AI analysis
@@ -110,64 +136,68 @@ const CameraAnalysis = ({ isOpen, onClose }) => {
       if (analysisMode === 'maturity') {
         // Crop maturity analysis using comprehensive library
         try {
-          const result = await cropMaturityAnalyzer.analyzeCropMaturity(img);
-          setAnalysisResult({
-            ...result,
-            confidence: result.confidence || 0.5
-          });
+          const maturityResult = await cropMaturityAnalyzer.analyzeCropMaturity(img);
+          const result = {
+            ...maturityResult,
+            confidence: maturityResult.confidence || 0.5
+          };
+          setAnalysisResult(result);
         } catch (error) {
           console.error('Maturity analysis error:', error);
           setAnalysisResult({
             valid: false,
             confidence: 0,
-            message: 'Error al analizar la madurez del cultivo'
+            type: 'Error',
+            maturity: 'No determinado',
+            message: 'Error al analizar la madurez del cultivo. Asegúrate de que la imagen contenga una planta o fruto visible con buena iluminación.',
+            characteristics: ['Error en el análisis - Intenta con una imagen más clara'],
+            recommendations: ['Mejora la iluminación', 'Acerca la cámara al cultivo', 'Asegúrate de que la planta sea claramente visible']
           });
         }
         
       } else if (analysisMode === 'pest') {
         // Pest identification using comprehensive library
-        const pestAnalysis = await pestIdentificationAI.identifyPest(img);
-        
-        if (pestAnalysis.detected) {
+        try {
+          const pestAnalysis = await pestIdentificationAI.identifyPest(img);
+          
+          if (pestAnalysis.detected) {
+            setAnalysisResult({
+              valid: true,
+              type: 'pest_detection',
+              message: `${pestAnalysis.pestName} detectado - Severidad: ${pestAnalysis.severity}`,
+              pestData: pestAnalysis
+            });
+            setDangerAlert(`⚠️ ${pestAnalysis.pestName} detectado (${(pestAnalysis.confidence * 100).toFixed(1)}% confianza)`);
+            setPestAlert(pestAnalysis);
+            drawPestHeatmap(pestAnalysis.locations);
+          } else {
+            setAnalysisResult({
+              valid: true,
+              type: 'pest_detection',
+              message: '✅ No se detectaron plagas específicas en la imagen',
+              pestData: null
+            });
+          }
+        } catch (error) {
+          console.error('Pest analysis error:', error);
           setAnalysisResult({
-            valid: true,
+            valid: false,
             type: 'pest_detection',
-            message: `${pestAnalysis.pestName} detectado - Severidad: ${pestAnalysis.severity}`,
-            pestData: pestAnalysis
-          });
-          setDangerAlert(`⚠️ ${pestAnalysis.pestName} detectado (${(pestAnalysis.confidence * 100).toFixed(1)}% confianza)`);
-          setPestAlert(pestAnalysis);
-          drawPestHeatmap(pestAnalysis.locations);
-        } else {
-          setAnalysisResult({
-            valid: true,
-            type: 'pest_detection',
-            message: '✅ No se detectaron plagas específicas en la imagen',
+            message: 'Error al analizar plagas. Asegúrate de que la imagen muestre claramente las hojas o partes de la planta.',
             pestData: null
           });
         }
       }
 
-      // Auto-save to database after setting result
-      const finalResult = analysisMode === 'pest' ? 
-        (pestAnalysis.detected ? {
-          valid: true,
-          type: 'pest_detection',
-          message: `${pestAnalysis.pestName} detectado - Severidad: ${pestAnalysis.severity}`,
-          pestData: pestAnalysis
-        } : {
-          valid: true,
-          type: 'pest_detection', 
-          message: '✅ No se detectaron plagas específicas en la imagen',
-          pestData: null
-        }) : result;
-        
-      await saveAnalysis({
-        image: capturedImage,
-        result: finalResult,
-        timestamp: new Date().toISOString(),
-        analysisMode
-      });
+      // Auto-save analysis result
+      if (analysisResult && analysisResult.valid) {
+        await saveAnalysis({
+          image: capturedImage,
+          result: analysisResult,
+          timestamp: new Date().toISOString(),
+          analysisMode
+        });
+      }
 
     } catch (error) {
       console.error('Analysis error:', error);
@@ -227,7 +257,9 @@ const CameraAnalysis = ({ isOpen, onClose }) => {
 
   const saveAnalysis = async (data) => {
     try {
-      const payload = {
+      // Save to localStorage instead of backend when backend is not available
+      const analysisData = {
+        id: Date.now().toString(),
         deviceId: 'camera-analysis',
         cultivo: data.result?.type || data.result?.pestData?.pestName || 'desconocido',
         verdict: data.result?.maturity || (data.result?.pestData?.detected ? 'plaga_detectada' : 'analizado'),
@@ -237,27 +269,46 @@ const CameraAnalysis = ({ isOpen, onClose }) => {
         analysisMode: data.analysisMode,
         pestData: data.result?.pestData || null,
         heatmapEnabled: data.analysisMode === 'pest' && data.result?.pestData?.detected,
-        timestamp: data.timestamp
+        timestamp: data.timestamp,
+        size: data.result?.size || null
       };
       
-      const response = await fetch('/api/ia', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': localStorage.getItem('csrfToken') || ''
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      if (response.ok) {
-        console.log('Analysis saved successfully');
-        // Trigger dashboard refresh if it's open
-        window.dispatchEvent(new CustomEvent('analysisUpdated'));
-      } else {
-        console.error('Failed to save analysis:', await response.text());
+      // Try to save to backend first, fallback to localStorage
+      try {
+        const response = await fetch('/api/ia', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': localStorage.getItem('csrfToken') || ''
+          },
+          body: JSON.stringify(analysisData)
+        });
+        
+        if (response.ok) {
+          console.log('Analysis saved to backend successfully');
+          showNotification('success', 'Análisis guardado', 'Resultado guardado correctamente');
+        } else {
+          throw new Error('Backend not available');
+        }
+      } catch (backendError) {
+        // Save to localStorage as fallback
+        const existingAnalyses = JSON.parse(localStorage.getItem('agrosens_analyses') || '[]');
+        existingAnalyses.unshift(analysisData);
+        // Keep only last 50 analyses
+        if (existingAnalyses.length > 50) {
+          existingAnalyses.splice(50);
+        }
+        localStorage.setItem('agrosens_analyses', JSON.stringify(existingAnalyses));
+        console.log('Analysis saved to localStorage (backend unavailable)');
+        showNotification('info', 'Análisis guardado localmente', 'Servidor no disponible - guardado en dispositivo');
       }
+      
+      // Trigger dashboard refresh if it's open
+      window.dispatchEvent(new CustomEvent('analysisUpdated'));
+      
     } catch (error) {
       console.error('Error saving analysis:', error);
+      // Even if saving fails, the analysis still worked
     }
   };
   
@@ -438,6 +489,9 @@ const CameraAnalysis = ({ isOpen, onClose }) => {
                       <p><strong>Cultivo:</strong> {analysisResult.type}</p>
                       <p><strong>Estado:</strong> {analysisResult.maturity}</p>
                       <p><strong>Confianza:</strong> {(analysisResult.confidence * 100).toFixed(1)}%</p>
+                      {analysisResult.size && (
+                        <p><strong>Tamaño estimado:</strong> {analysisResult.size.estimatedDiameter} ({analysisResult.size.category})</p>
+                      )}
                       {analysisResult.daysToMaturity !== undefined && (
                         <p><strong>Días para madurez:</strong> {analysisResult.daysToMaturity}</p>
                       )}
@@ -459,15 +513,21 @@ const CameraAnalysis = ({ isOpen, onClose }) => {
                           ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        Confianza: {analysisResult.confidence > 0.7 ? 'Alta' : analysisResult.confidence > 0.5 ? 'Media' : 'Baja'}
+                        <div>Confianza: {analysisResult.confidence > 0.7 ? 'Alta' : analysisResult.confidence > 0.5 ? 'Media' : 'Baja'}</div>
+                        {analysisResult.size && analysisResult.size.confidence > 0.3 && (
+                          <div>Medición de tamaño: {(analysisResult.size.confidence * 100).toFixed(0)}% precisa</div>
+                        )}
                       </div>
                     </div>
                   ) : (
                     <div>
                       <p className="text-red-600 mb-2">{analysisResult.message}</p>
-                      <div className="text-xs text-gray-600 bg-gray-100 p-2 rounded">
-                        💡 Consejos: Asegúrate de que la imagen contenga una planta o fruto visible, 
-                        con buena iluminación y enfoque claro.
+                      <div className="text-xs text-gray-600 bg-gray-100 dark:bg-gray-600 dark:text-gray-300 p-2 rounded">
+                        💡 <strong>Consejos para mejorar el análisis:</strong><br/>
+                        • Asegúrate de que haya suficiente luz natural<br/>
+                        • Enfoca directamente la planta o fruto<br/>
+                        • Evita fondos completamente negros o blancos<br/>
+                        • Mantén la cámara estable al capturar
                       </div>
                     </div>
                   )}
@@ -574,8 +634,12 @@ const CameraAnalysis = ({ isOpen, onClose }) => {
                   ) : (
                     <div>
                       <p className="text-red-600 mb-2">{analysisResult.message}</p>
-                      <div className="text-xs text-gray-600 bg-gray-100 p-2 rounded">
-                        💡 Consejos: Asegúrate de que la imagen contenga una planta visible para detectar plagas.
+                      <div className="text-xs text-gray-600 bg-gray-100 dark:bg-gray-600 dark:text-gray-300 p-2 rounded">
+                        💡 <strong>Consejos para detección de plagas:</strong><br/>
+                        • Enfoca las hojas donde suelen aparecer plagas<br/>
+                        • Busca áreas con daños visibles o decoloración<br/>
+                        • Asegúrate de que la imagen tenga buena iluminación<br/>
+                        • Evita imágenes borrosas o muy oscuras
                       </div>
                     </div>
                   )}

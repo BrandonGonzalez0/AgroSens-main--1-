@@ -13,12 +13,26 @@ const GeoTerrainSimulator = ({ isOpen, onClose }) => {
   const [customMode, setCustomMode] = useState(false);
   const [customCorners, setCustomCorners] = useState([]);
   const [isSelectingCorners, setIsSelectingCorners] = useState(false);
+  const [originalTerrain, setOriginalTerrain] = useState(null);
+  const [savedTerrains, setSavedTerrains] = useState([]);
   const mapRef = useRef(null);
   const leafletMapRef = useRef(null);
 
   useEffect(() => {
     if (isOpen && !mapLoaded) {
       loadLeafletMap();
+    }
+    
+    // Load saved terrains from localStorage
+    if (isOpen) {
+      const saved = localStorage.getItem('agrosens_saved_terrains');
+      if (saved) {
+        try {
+          setSavedTerrains(JSON.parse(saved));
+        } catch (e) {
+          console.error('Error loading saved terrains:', e);
+        }
+      }
     }
   }, [isOpen, mapLoaded]);
 
@@ -238,15 +252,28 @@ const GeoTerrainSimulator = ({ isOpen, onClose }) => {
                   customCorners={customCorners}
                   setCustomCorners={setCustomCorners}
                   onFinishCustomSelection={(newTerrain) => {
+                    if (leafletMapRef.current) {
+                      leafletMapRef.current.remove();
+                      leafletMapRef.current = null;
+                    }
                     setTerrain(newTerrain);
                     setIsSelectingCorners(false);
                     setCustomCorners([]);
                     setSensors({});
                     setSelectedGrid(null);
+                    setOriginalTerrain(null);
                   }}
                   onCancelCustomSelection={() => {
+                    if (leafletMapRef.current) {
+                      leafletMapRef.current.remove();
+                      leafletMapRef.current = null;
+                    }
                     setIsSelectingCorners(false);
                     setCustomCorners([]);
+                    if (originalTerrain) {
+                      setTerrain(originalTerrain);
+                      setOriginalTerrain(null);
+                    }
                   }}
                 />
               </div>
@@ -262,9 +289,27 @@ const GeoTerrainSimulator = ({ isOpen, onClose }) => {
                   gridToGeo={gridToGeo}
                   onCustomMode={() => {
                     console.log('Activando modo selección de esquinas');
+                    setOriginalTerrain(terrain);
                     setIsSelectingCorners(true);
                     setCustomCorners([]);
                     setSelectedGrid(null);
+                  }}
+                  onSaveTerrain={(terrainData) => {
+                    const savedTerrain = {
+                      ...terrainData,
+                      savedAt: new Date().toISOString(),
+                      sensors: { ...sensors }
+                    };
+                    setSavedTerrains(prev => [...prev, savedTerrain]);
+                    localStorage.setItem('agrosens_saved_terrains', JSON.stringify([...savedTerrains, savedTerrain]));
+                    showNotification('success', 'Terreno guardado', 'Progreso guardado para continuar después');
+                  }}
+                  savedTerrains={savedTerrains}
+                  onLoadTerrain={(savedTerrain) => {
+                    setTerrain(savedTerrain);
+                    setSensors(savedTerrain.sensors || {});
+                    setSelectedGrid(null);
+                    showNotification('success', 'Terreno cargado', 'Progreso restaurado correctamente');
                   }}
                 />
               </div>
@@ -304,8 +349,13 @@ const GeoTerrainForm = ({ onSubmit, onCustomMode }) => {
   const [gpsLoading, setGpsLoading] = useState(false);
 
   const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      showNotification('error', 'GPS no disponible', 'Tu dispositivo no soporta geolocalización');
+      return;
+    }
+
     setGpsLoading(true);
-    navigator.geolocation?.getCurrentPosition(
+    navigator.geolocation.getCurrentPosition(
       (position) => {
         setFormData(prev => ({
           ...prev,
@@ -317,7 +367,16 @@ const GeoTerrainForm = ({ onSubmit, onCustomMode }) => {
       },
       (error) => {
         setGpsLoading(false);
-        showNotification('error', 'Error GPS', 'No se pudo obtener la ubicación');
+        let errorMessage = 'No se pudo obtener la ubicación';
+        if (error.code === 1) errorMessage = 'Permiso de ubicación denegado';
+        else if (error.code === 2) errorMessage = 'Ubicación no disponible';
+        else if (error.code === 3) errorMessage = 'Tiempo de espera agotado';
+        showNotification('error', 'Error GPS', errorMessage);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
       }
     );
   };
@@ -468,15 +527,7 @@ const GeoTerrainForm = ({ onSubmit, onCustomMode }) => {
             🌍 Crear Terreno GPS
           </motion.button>
           
-          <motion.button
-            type="button"
-            onClick={onCustomMode}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl"
-          >
-            📍 Mapa Personalizado
-          </motion.button>
+
         </div>
       </form>
     </div>
@@ -785,7 +836,7 @@ const GeoTerrainMap = ({ terrain, sensors, selectedGrid, onGridClick, getGridRec
   );
 };
 
-const GeoTerrainPanel = ({ terrain, selectedGrid, sensors, onAddSensor, onBack, onExport, getGridRecommendation, gridToGeo, onCustomMode }) => {
+const GeoTerrainPanel = ({ terrain, selectedGrid, sensors, onAddSensor, onBack, onExport, getGridRecommendation, gridToGeo, onCustomMode, onSaveTerrain, savedTerrains, onLoadTerrain }) => {
   const sensor = selectedGrid ? sensors[selectedGrid] : null;
   const recommendation = selectedGrid ? getGridRecommendation(selectedGrid) : null;
   const geoCoords = selectedGrid ? gridToGeo(selectedGrid) : null;
@@ -830,6 +881,13 @@ const GeoTerrainPanel = ({ terrain, selectedGrid, sensors, onAddSensor, onBack, 
 
         <div className="mt-4 space-y-2">
           <button
+            onClick={() => onSaveTerrain(terrain)}
+            className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all"
+          >
+            💾 Guardar Progreso
+          </button>
+          
+          <button
             onClick={onExport}
             disabled={Object.keys(sensors).length === 0}
             className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white rounded-lg transition-all"
@@ -847,6 +905,28 @@ const GeoTerrainPanel = ({ terrain, selectedGrid, sensors, onAddSensor, onBack, 
             📍 Mapa Personalizado
           </button>
         </div>
+        
+        {savedTerrains.length > 0 && (
+          <div className="mt-4">
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              💾 Terrenos Guardados
+            </h4>
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {savedTerrains.map((saved, index) => (
+                <button
+                  key={index}
+                  onClick={() => onLoadTerrain(saved)}
+                  className="w-full text-left px-3 py-2 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-all"
+                >
+                  <div className="font-medium">{saved.name}</div>
+                  <div className="text-gray-500 dark:text-gray-400">
+                    {new Date(saved.savedAt).toLocaleDateString()}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {selectedGrid ? (

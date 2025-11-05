@@ -95,10 +95,10 @@ const NotificationSystem = () => {
                 
                 <div className="flex-1 min-w-0">
                   <h4 className={`${styles.titleColor} font-semibold text-sm mb-1`}>
-                    {notification.title}
+                    {sanitizeText(notification.title)}
                   </h4>
                   <p className={`${styles.messageColor} text-sm`}>
-                    {notification.message}
+                    {sanitizeText(notification.message)}
                   </p>
                 </div>
                 
@@ -134,10 +134,37 @@ const NotificationSystem = () => {
   );
 };
 
+// Sanitize text content to prevent XSS
+const sanitizeText = (text) => {
+  if (typeof text !== 'string') {
+    return String(text || '');
+  }
+  
+  return text
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;')
+    .substring(0, 500); // Limit length
+};
+
 // Helper function to show notifications from anywhere in the app
 export const showNotification = (type, title, message, duration = 5000) => {
+  // Validate and sanitize inputs
+  const validTypes = ['success', 'error', 'warning', 'info'];
+  const safeType = validTypes.includes(type) ? type : 'info';
+  const safeTitle = sanitizeText(title);
+  const safeMessage = sanitizeText(message);
+  const safeDuration = Math.min(Math.max(parseInt(duration) || 5000, 1000), 30000);
+  
   window.dispatchEvent(new CustomEvent('showNotification', {
-    detail: { type, title, message, duration }
+    detail: { 
+      type: safeType, 
+      title: safeTitle, 
+      message: safeMessage, 
+      duration: safeDuration 
+    }
   }));
 };
 

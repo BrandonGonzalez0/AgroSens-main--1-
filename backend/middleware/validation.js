@@ -191,4 +191,20 @@ const validateURL = (url) => {
   }
 };
 
-export { validateInput, sanitizeInput, validatePath, validateURL };
+// Generate secure random tokens
+const generateSecureToken = () => {
+  return require('crypto').randomBytes(32).toString('hex');
+};
+
+// Validate API keys (remove hardcoded credentials)
+const validateApiKey = (apiKey) => {
+  if (!apiKey || typeof apiKey !== 'string') {
+    return false;
+  }
+  
+  // Get from environment variables instead of hardcoded
+  const validApiKeys = process.env.VALID_API_KEYS ? process.env.VALID_API_KEYS.split(',') : [];
+  return validApiKeys.includes(apiKey);
+};
+
+export { validateInput, sanitizeInput, validatePath, validateURL, generateSecureToken, validateApiKey };

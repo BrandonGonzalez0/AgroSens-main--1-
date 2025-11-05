@@ -1,11 +1,10 @@
-// Comprehensive pest identification library with detailed pest database
 const PEST_DATABASE = {
   aphids: {
     name: 'Pulgones (Aphids)',
     scientificName: 'Aphidoidea',
     description: 'Pequeños insectos chupadores que se alimentan de la savia de las plantas',
     characteristics: {
-      size: 'small', // 1-4mm
+      size: 'small',
       color: { primary: 'green', secondary: ['black', 'white', 'red'] },
       shape: 'oval',
       behavior: 'clusters',
@@ -20,20 +19,14 @@ const PEST_DATABASE = {
       organic: ['Jabón potásico', 'Aceite de neem', 'Mariquitas (control biológico)'],
       chemical: ['Imidacloprid', 'Pirimicarb'],
       prevention: ['Eliminar malas hierbas', 'Evitar exceso de nitrógeno', 'Plantas repelentes']
-    },
-    detectionPattern: {
-      colorRange: { h: [80, 140], s: [0.3, 0.8], v: [0.2, 0.7] },
-      textureIndicators: ['clusters_pequeños', 'superficie_pegajosa'],
-      shapeFeatures: ['puntos_pequeños_agrupados']
     }
   },
-  
   whitefly: {
     name: 'Mosca Blanca (Whitefly)',
     scientificName: 'Bemisia tabaci',
     description: 'Pequeños insectos voladores blancos que se alimentan del envés de las hojas',
     characteristics: {
-      size: 'tiny', // 1-2mm
+      size: 'tiny',
       color: { primary: 'white', secondary: ['yellow'] },
       shape: 'triangular',
       behavior: 'flying_swarms',
@@ -48,151 +41,6 @@ const PEST_DATABASE = {
       organic: ['Trampas amarillas', 'Aceite de neem', 'Encarsia formosa (parasitoide)'],
       chemical: ['Spiromesifen', 'Pyriproxyfen'],
       prevention: ['Mallas anti-insecto', 'Eliminación de hospederos', 'Rotación de cultivos']
-    },
-    detectionPattern: {
-      colorRange: { h: [0, 60], s: [0.1, 0.4], v: [0.7, 1.0] },
-      textureIndicators: ['puntos_blancos_moviles', 'nubes_blancas'],
-      shapeFeatures: ['particulas_blancas_pequeñas']
-    }
-  },
-  
-  thrips: {
-    name: 'Trips (Thrips)',
-    scientificName: 'Thysanoptera',
-    description: 'Insectos diminutos que rascan la superficie de las hojas para alimentarse',
-    characteristics: {
-      size: 'tiny', // 1-2mm
-      color: { primary: 'yellow', secondary: ['brown', 'black'] },
-      shape: 'elongated',
-      behavior: 'rasping',
-      location: ['superficie_hojas', 'flores', 'frutos_jovenes']
-    },
-    damage: {
-      type: 'raspador',
-      symptoms: ['Manchas plateadas en hojas', 'Puntos negros (excrementos)', 'Deformación de hojas', 'Cicatrices en frutos'],
-      severity: 'moderate'
-    },
-    treatment: {
-      organic: ['Trampas azules', 'Ácaros depredadores', 'Aceite de neem'],
-      chemical: ['Spinosad', 'Abamectina'],
-      prevention: ['Eliminación de malas hierbas', 'Riego por aspersión', 'Plantas trampa']
-    },
-    detectionPattern: {
-      colorRange: { h: [40, 80], s: [0.4, 0.9], v: [0.3, 0.8] },
-      textureIndicators: ['rayas_plateadas', 'puntos_negros_pequeños'],
-      shapeFeatures: ['lineas_irregulares', 'manchas_alargadas']
-    }
-  },
-  
-  spider_mites: {
-    name: 'Araña Roja (Spider Mites)',
-    scientificName: 'Tetranychus urticae',
-    description: 'Ácaros microscópicos que tejen telarañas finas y causan punteado en las hojas',
-    characteristics: {
-      size: 'microscopic', // 0.5mm
-      color: { primary: 'red', secondary: ['yellow', 'green'] },
-      shape: 'oval',
-      behavior: 'web_spinning',
-      location: ['enves_hojas', 'entre_nervaduras']
-    },
-    damage: {
-      type: 'chupador_microscopico',
-      symptoms: ['Punteado amarillo en hojas', 'Telarañas finas', 'Bronceado de hojas', 'Defoliación'],
-      severity: 'high'
-    },
-    treatment: {
-      organic: ['Ácaros depredadores', 'Azufre', 'Aceite de neem', 'Aumento de humedad'],
-      chemical: ['Abamectina', 'Bifenazate'],
-      prevention: ['Mantener humedad alta', 'Evitar estrés hídrico', 'Plantas refugio para depredadores']
-    },
-    detectionPattern: {
-      colorRange: { h: [0, 30], s: [0.5, 1.0], v: [0.3, 0.8] },
-      textureIndicators: ['telarañas_finas', 'punteado_fino'],
-      shapeFeatures: ['patrones_reticulares', 'puntos_muy_pequeños']
-    }
-  },
-  
-  caterpillars: {
-    name: 'Orugas (Caterpillars)',
-    scientificName: 'Lepidoptera larvae',
-    description: 'Larvas de mariposas y polillas que se alimentan de hojas, tallos y frutos',
-    characteristics: {
-      size: 'medium', // 10-50mm
-      color: { primary: 'green', secondary: ['brown', 'yellow', 'black'] },
-      shape: 'cylindrical',
-      behavior: 'chewing',
-      location: ['hojas', 'tallos', 'frutos', 'suelo']
-    },
-    damage: {
-      type: 'masticador',
-      symptoms: ['Agujeros en hojas', 'Defoliación', 'Daño en frutos', 'Excrementos visibles'],
-      severity: 'high'
-    },
-    treatment: {
-      organic: ['Bacillus thuringiensis', 'Recolección manual', 'Trampas de feromonas'],
-      chemical: ['Clorpirifos', 'Deltametrina'],
-      prevention: ['Rotación de cultivos', 'Eliminación de restos vegetales', 'Plantas repelentes']
-    },
-    detectionPattern: {
-      colorRange: { h: [80, 140], s: [0.3, 0.8], v: [0.2, 0.7] },
-      textureIndicators: ['agujeros_grandes', 'bordes_mordidos'],
-      shapeFeatures: ['formas_cilíndricas', 'patrones_masticación']
-    }
-  },
-  
-  leaf_miners: {
-    name: 'Minadores de Hojas (Leaf Miners)',
-    scientificName: 'Liriomyza spp.',
-    description: 'Larvas que crean túneles característicos dentro del tejido foliar',
-    characteristics: {
-      size: 'small', // 2-3mm
-      color: { primary: 'yellow', secondary: ['white'] },
-      shape: 'serpentine',
-      behavior: 'tunneling',
-      location: ['interior_hojas', 'mesofilo']
-    },
-    damage: {
-      type: 'minador',
-      symptoms: ['Túneles serpenteantes en hojas', 'Manchas amarillas', 'Reducción fotosíntesis', 'Caída prematura de hojas'],
-      severity: 'moderate'
-    },
-    treatment: {
-      organic: ['Parasitoides Diglyphus', 'Eliminación de hojas afectadas', 'Trampas amarillas'],
-      chemical: ['Abamectina', 'Cyromazine'],
-      prevention: ['Mallas anti-insecto', 'Eliminación de malas hierbas', 'Rotación de cultivos']
-    },
-    detectionPattern: {
-      colorRange: { h: [50, 80], s: [0.4, 0.8], v: [0.4, 0.9] },
-      textureIndicators: ['lineas_serpenteantes', 'túneles_claros'],
-      shapeFeatures: ['patrones_curvos', 'lineas_continuas']
-    }
-  },
-  
-  scale_insects: {
-    name: 'Cochinillas (Scale Insects)',
-    scientificName: 'Coccoidea',
-    description: 'Insectos que se adhieren a tallos y hojas, protegidos por una cubierta cerosa',
-    characteristics: {
-      size: 'small', // 2-5mm
-      color: { primary: 'brown', secondary: ['white', 'yellow'] },
-      shape: 'oval',
-      behavior: 'stationary',
-      location: ['tallos', 'hojas', 'ramas']
-    },
-    damage: {
-      type: 'chupador_persistente',
-      symptoms: ['Amarillamiento', 'Debilitamiento', 'Melaza', 'Fumagina'],
-      severity: 'moderate'
-    },
-    treatment: {
-      organic: ['Aceite mineral', 'Alcohol isopropílico', 'Coccinélidos depredadores'],
-      chemical: ['Imidacloprid sistémico', 'Spirotetramat'],
-      prevention: ['Inspección regular', 'Cuarentena de plantas nuevas', 'Evitar exceso de nitrógeno']
-    },
-    detectionPattern: {
-      colorRange: { h: [20, 60], s: [0.3, 0.7], v: [0.2, 0.6] },
-      textureIndicators: ['protuberancias_cerosas', 'superficie_rugosa'],
-      shapeFeatures: ['puntos_adheridos', 'formas_ovaladas']
     }
   }
 };
@@ -205,16 +53,21 @@ class PestIdentificationAI {
 
   async identifyPest(imageElement) {
     try {
-      // Extract visual features from image
+      const contentValidation = await this.validateImageContent(imageElement);
+      
+      if (!contentValidation.hasValidContent) {
+        return {
+          detected: false,
+          confidence: 0,
+          pestType: 'invalid_image',
+          message: contentValidation.reason
+        };
+      }
+      
       const visualFeatures = await this.extractVisualFeatures(imageElement);
-      
-      // Analyze damage patterns
       const damageAnalysis = this.analyzeDamagePatterns(visualFeatures);
-      
-      // Identify pest species
       const pestIdentification = this.identifyPestSpecies(visualFeatures, damageAnalysis);
       
-      // Generate comprehensive report
       return this.generatePestReport(pestIdentification, damageAnalysis);
       
     } catch (error) {
@@ -223,9 +76,68 @@ class PestIdentificationAI {
         detected: false,
         confidence: 0,
         pestType: 'unknown',
-        message: 'Error al identificar la plaga'
+        message: 'Error al identificar la plaga: ' + error.message
       };
     }
+  }
+
+  async validateImageContent(imageElement) {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      canvas.width = 224;
+      canvas.height = 224;
+      ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
+      
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const pixels = imageData.data;
+      
+      let totalBrightness = 0;
+      let darkPixels = 0;
+      let colorfulPixels = 0;
+      let pixelCount = 0;
+      
+      for (let i = 0; i < pixels.length; i += 16) {
+        const r = pixels[i] / 255;
+        const g = pixels[i + 1] / 255;
+        const b = pixels[i + 2] / 255;
+        const brightness = (r + g + b) / 3;
+        
+        totalBrightness += brightness;
+        pixelCount++;
+        
+        if (brightness < 0.05) darkPixels++;
+        
+        const colorVariation = Math.abs(r - g) + Math.abs(g - b) + Math.abs(b - r);
+        if (colorVariation > 0.05) colorfulPixels++;
+      }
+      
+      const avgBrightness = totalBrightness / pixelCount;
+      const darkRatio = darkPixels / pixelCount;
+      const colorfulRatio = colorfulPixels / pixelCount;
+      
+      let hasValidContent = true;
+      let reason = '';
+      
+      if (avgBrightness < 0.1) {
+        hasValidContent = false;
+        reason = 'La imagen está muy oscura. Mejora la iluminación y vuelve a intentar.';
+      } else if (darkRatio > 0.9) {
+        hasValidContent = false;
+        reason = 'La imagen parece ser completamente negra. Asegúrate de enfocar una planta.';
+      } else if (colorfulRatio < 0.1) {
+        hasValidContent = false;
+        reason = 'No se detectó suficiente contenido visual. Enfoca una planta con hojas visibles.';
+      }
+      
+      resolve({
+        hasValidContent,
+        reason,
+        brightness: avgBrightness,
+        colorVariety: colorfulRatio
+      });
+    });
   }
 
   async extractVisualFeatures(imageElement) {
@@ -240,13 +152,8 @@ class PestIdentificationAI {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const pixels = imageData.data;
       
-      // Color analysis
       const colorFeatures = this.analyzeColors(pixels);
-      
-      // Texture analysis
       const textureFeatures = this.analyzeTexture(pixels, canvas.width, canvas.height);
-      
-      // Shape analysis
       const shapeFeatures = this.analyzeShapes(pixels, canvas.width, canvas.height);
       
       resolve({
@@ -265,14 +172,13 @@ class PestIdentificationAI {
     
     let totalPixels = 0;
     
-    for (let i = 0; i < pixels.length; i += 16) { // Sample every 4th pixel
+    for (let i = 0; i < pixels.length; i += 16) {
       const r = pixels[i] / 255;
       const g = pixels[i + 1] / 255;
       const b = pixels[i + 2] / 255;
       
       const [h, s, v] = this.rgbToHsv(r, g, b);
       
-      // Classify color
       if (v < 0.2) colorCounts.black++;
       else if (s < 0.2 && v > 0.8) colorCounts.white++;
       else if (h >= 0 && h <= 30 && s > 0.5) colorCounts.red++;
@@ -284,7 +190,6 @@ class PestIdentificationAI {
       totalPixels++;
     }
     
-    // Convert to percentages
     for (let color in colorCounts) {
       colorCounts[color] = colorCounts[color] / totalPixels;
     }
@@ -293,12 +198,10 @@ class PestIdentificationAI {
   }
 
   analyzeTexture(pixels, width, height) {
-    // Analyze texture patterns for pest identification
     let edgeCount = 0;
     let smoothAreas = 0;
     let roughAreas = 0;
     
-    // Simple edge detection
     for (let y = 1; y < height - 1; y++) {
       for (let x = 1; x < width - 1; x++) {
         const idx = (y * width + x) * 4;
@@ -325,7 +228,6 @@ class PestIdentificationAI {
   }
 
   analyzeShapes(pixels, width, height) {
-    // Analyze shape patterns that indicate specific pests
     const shapes = {
       clusters: 0,
       lines: 0,
@@ -334,7 +236,6 @@ class PestIdentificationAI {
       holes: 0
     };
     
-    // Simple pattern detection based on pixel arrangements
     for (let y = 2; y < height - 2; y += 4) {
       for (let x = 2; x < width - 2; x += 4) {
         const pattern = this.getLocalPattern(pixels, x, y, width);
@@ -351,7 +252,6 @@ class PestIdentificationAI {
   }
 
   getLocalPattern(pixels, x, y, width) {
-    // Analyze 5x5 pixel area for patterns
     const pattern = {
       isCluster: false,
       isLine: false,
@@ -375,7 +275,6 @@ class PestIdentificationAI {
     
     const ratio = darkPixels / (darkPixels + lightPixels);
     
-    // Pattern classification based on pixel distribution
     if (ratio > 0.6 && darkPixels > 15) pattern.isCluster = true;
     if (ratio > 0.3 && ratio < 0.7) pattern.isLine = true;
     if (ratio > 0.8 && darkPixels < 10) pattern.isSpot = true;
@@ -431,7 +330,6 @@ class PestIdentificationAI {
       confidence: 0
     };
     
-    // Analyze damage based on visual features
     if (features.shapes.holes > 10) {
       damage.type = 'chewing';
       damage.patterns.push('holes_in_leaves');
@@ -474,8 +372,6 @@ class PestIdentificationAI {
       let confidence = 0;
       const reasoning = [];
       
-      // Color matching
-      const detectionPattern = pestData.detectionPattern;
       const dominantColor = features.overall.dominantColor;
       
       if (dominantColor === pestData.characteristics.color.primary) {
@@ -483,26 +379,14 @@ class PestIdentificationAI {
         reasoning.push(`Color primario coincide: ${dominantColor}`);
       }
       
-      // Damage type matching
       if (damage.type === pestData.damage.type.split('_')[0]) {
         confidence += 0.4;
         reasoning.push(`Tipo de daño coincide: ${damage.type}`);
       }
       
-      // Pattern matching
       if (features.shapes.clusters > 10 && pestData.characteristics.behavior === 'clusters') {
         confidence += 0.2;
         reasoning.push('Patrón de agrupamiento detectado');
-      }
-      
-      if (features.shapes.webs > 3 && pestData.characteristics.behavior === 'web_spinning') {
-        confidence += 0.3;
-        reasoning.push('Telarañas detectadas');
-      }
-      
-      if (features.shapes.lines > 10 && pestData.characteristics.behavior === 'tunneling') {
-        confidence += 0.3;
-        reasoning.push('Túneles serpenteantes detectados');
       }
       
       if (confidence > bestMatch.confidence) {

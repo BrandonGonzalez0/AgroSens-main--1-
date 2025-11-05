@@ -18,10 +18,32 @@ const FILE_SIGNATURES = {
   'image/webp': [0x52, 0x49, 0x46, 0x46]
 };
 
+// Validate and sanitize file paths to prevent directory traversal
+const validatePath = (inputPath) => {
+  if (!inputPath || typeof inputPath !== 'string') {
+    throw new Error('Invalid path');
+  }
+  
+  // Remove null bytes and normalize
+  const cleaned = inputPath.replace(/\0/g, '').normalize();
+  
+  // Check for directory traversal attempts
+  if (cleaned.includes('..') || cleaned.includes('~') || cleaned.startsWith('/') || cleaned.includes('\\')) {
+    throw new Error('Path traversal attempt detected');
+  }
+  
+  // Only allow alphanumeric, hyphens, underscores, and dots
+  if (!/^[a-zA-Z0-9._-]+$/.test(cleaned)) {
+    throw new Error('Invalid characters in path');
+  }
+  
+  return cleaned;
+};
+
 // Ensure upload directory exists with proper permissions
 const ensureUploadDir = async () => {
   try {
-    await fs.mkdir(UPLOAD_DIR, { recursive: true, mode: 0o755 });
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
   } catch (error) {
     console.error('Failed to create upload directory:', error);
     throw error;
@@ -133,14 +155,22 @@ const secureFileUpload = (fieldName) => {
             
             // Generate secure filename
             const ext = path.extname(req.file.originalname).toLowerCase();
-            const filename = crypto.randomUUID() + ext;
-            const filepath = path.join(UPLOAD_DIR, filename);
+            const secureFilename = crypto.randomUUID() + ext;
+            
+            // Validate the generated filename
+            const validatedFilename = validatePath(secureFilename);
+            const filepath = path.resolve(UPLOAD_DIR, validatedFilename);
+            
+            // Ensure the resolved path is within upload directory
+            if (!filepath.startsWith(path.resolve(UPLOAD_DIR))) {
+              throw new Error('Invalid file path');
+            }
             
             // Save file securely
-            await fs.writeFile(filepath, req.file.buffer, { mode: 0o644 });
+            await fs.writeFile(filepath, req.file.buffer);
             
             // Add file info to request
-            req.file.filename = filename;
+            req.file.filename = validatedFilename;
             req.file.path = filepath;
             
             // Clear buffer from memory

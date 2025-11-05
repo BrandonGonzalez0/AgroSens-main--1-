@@ -3,14 +3,21 @@ class APIClient {
   constructor() {
     this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     this.csrfToken = null;
+    this.isProduction = import.meta.env.PROD;
   }
 
   async getCSRFToken() {
     if (this.csrfToken) return this.csrfToken;
     
     try {
-      const response = await fetch(`${this.baseURL}/api/csrf-token`, {
-        credentials: 'include'
+      // In development, use proxy; in production, use full URL
+      const endpoint = this.isProduction ? `${this.baseURL}/api/csrf-token` : '/api/csrf-token';
+      
+      const response = await fetch(endpoint, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
       });
       
       if (response.ok) {
@@ -26,7 +33,13 @@ class APIClient {
   }
 
   async request(endpoint, options = {}) {
-    const url = `${this.baseURL}${endpoint}`;
+    // Validate and sanitize endpoint
+    if (typeof endpoint !== 'string' || !endpoint.startsWith('/')) {
+      throw new Error('Invalid endpoint');
+    }
+    
+    // In development, use proxy; in production, use full URL
+    const url = this.isProduction ? `${this.baseURL}${endpoint}` : endpoint;
     const config = {
       credentials: 'include',
       headers: {

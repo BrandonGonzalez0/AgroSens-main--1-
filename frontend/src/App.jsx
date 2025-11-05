@@ -21,6 +21,7 @@ import { flushQueue } from './lib/sync';
 import WeatherRotator from './WeatherRotator';
 import { useSensorData } from './hooks/useSensorData';
 import apiClient, { sanitizeInput, validateSensorData } from './utils/api';
+import connectionManager, { onConnectionChange } from './utils/connection';
 
 // Mobile compatibility
 const isMobile = () => {
@@ -146,6 +147,7 @@ function App() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallManual, setShowInstallManual] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [backendConnected, setBackendConnected] = useState(false);
 
   // Auto-fill sensor data when available
   useEffect(() => {
@@ -159,6 +161,18 @@ function App() {
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    // Monitor backend connection
+    const unsubscribe = onConnectionChange((status, data) => {
+      setBackendConnected(status === 'connected');
+    });
+
+    // Initialize CSRF token
+    connectionManager.initializeCSRF();
+
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -357,11 +371,11 @@ function App() {
                 
                 <div className="flex items-center gap-3">
                   <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    isOnline 
+                    backendConnected 
                       ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' 
                       : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
                   }`}>
-                    {isOnline ? '🟢 Conectado' : '🟡 Sin conexión'}
+                    {backendConnected ? '🟢 Servidor Conectado' : '🟡 Modo Local'}
                   </div>
                   <button 
                     onClick={() => setDarkMode(!darkMode)}
@@ -996,7 +1010,19 @@ function App() {
 
         <div className="mt-8">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 text-center">Acciones Rápidas</h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Acciones Rápidas</h3>
+              <div className={`flex items-center gap-2 text-xs px-2 py-1 rounded-full ${
+                backendConnected 
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                  : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  backendConnected ? 'bg-green-500' : 'bg-red-500'
+                }`}></div>
+                {backendConnected ? 'Modo Online' : 'Modo Local'}
+              </div>
+            </div>
             <div className="flex flex-wrap justify-center gap-3">
               <button 
                 onClick={() => setShowCameraAnalysis(true)} 

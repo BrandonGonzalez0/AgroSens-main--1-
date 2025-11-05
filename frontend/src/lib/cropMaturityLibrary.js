@@ -1,4 +1,3 @@
-// Comprehensive crop maturity analysis library with pre-trained data
 const CROP_MATURITY_DATABASE = {
   tomate: {
     name: 'Tomate',
@@ -8,12 +7,6 @@ const CROP_MATURITY_DATABASE = {
         days: 14,
         description: 'Verde inmaduro',
         characteristics: ['Color verde uniforme', 'Textura firme', 'Tamaño en desarrollo']
-      },
-      pintón: {
-        color: { h: [40, 80], s: [0.4, 0.9], v: [0.3, 0.7] },
-        days: 7,
-        description: 'Iniciando maduración',
-        characteristics: ['Cambio de color verde a amarillo', 'Ligero ablandamiento', 'Desarrollo de azúcares']
       },
       maduro: {
         color: { h: [0, 30], s: [0.6, 1.0], v: [0.4, 0.9] },
@@ -32,12 +25,6 @@ const CROP_MATURITY_DATABASE = {
         description: 'Plántula en crecimiento',
         characteristics: ['Hojas pequeñas', 'Color verde claro', 'Centro compacto']
       },
-      desarrollo: {
-        color: { h: [90, 130], s: [0.5, 0.9], v: [0.4, 0.8] },
-        days: 10,
-        description: 'Formación de cabeza',
-        characteristics: ['Hojas expandiéndose', 'Verde más intenso', 'Estructura definida']
-      },
       maduro: {
         color: { h: [85, 125], s: [0.6, 1.0], v: [0.5, 0.9] },
         days: 0,
@@ -46,112 +33,6 @@ const CROP_MATURITY_DATABASE = {
       }
     }
   },
-  zanahoria: {
-    name: 'Zanahoria',
-    stages: {
-      inmadura: {
-        color: { h: [20, 40], s: [0.3, 0.7], v: [0.3, 0.6] },
-        days: 30,
-        description: 'Raíz en desarrollo',
-        characteristics: ['Color naranja pálido', 'Diámetro pequeño', 'Textura dura']
-      },
-      desarrollo: {
-        color: { h: [15, 35], s: [0.5, 0.8], v: [0.4, 0.7] },
-        days: 14,
-        description: 'Crecimiento activo',
-        characteristics: ['Naranja más intenso', 'Engrosamiento', 'Longitud aumentando']
-      },
-      maduro: {
-        color: { h: [10, 30], s: [0.7, 1.0], v: [0.5, 0.9] },
-        days: 0,
-        description: 'Listo para cosecha',
-        characteristics: ['Naranja brillante', 'Diámetro óptimo', 'Textura firme pero tierna']
-      }
-    }
-  },
-  pimiento: {
-    name: 'Pimiento',
-    stages: {
-      verde: {
-        color: { h: [90, 140], s: [0.4, 0.8], v: [0.3, 0.7] },
-        days: 21,
-        description: 'Verde inmaduro',
-        characteristics: ['Verde intenso', 'Textura firme', 'Sabor ligeramente amargo']
-      },
-      amarillo: {
-        color: { h: [45, 65], s: [0.6, 0.9], v: [0.5, 0.8] },
-        days: 7,
-        description: 'Transición a madurez',
-        characteristics: ['Amarillo dorado', 'Dulzor desarrollándose', 'Textura manteniéndose']
-      },
-      rojo: {
-        color: { h: [0, 20], s: [0.7, 1.0], v: [0.5, 0.9] },
-        days: 0,
-        description: 'Completamente maduro',
-        characteristics: ['Rojo brillante', 'Máxima dulzura', 'Textura óptima']
-      }
-    }
-  },
-  fresa: {
-    name: 'Fresa',
-    stages: {
-      verde: {
-        color: { h: [100, 140], s: [0.3, 0.7], v: [0.2, 0.5] },
-        days: 10,
-        description: 'Fruto inmaduro',
-        characteristics: ['Verde uniforme', 'Semillas hundidas', 'Textura dura']
-      },
-      blanca: {
-        color: { h: [0, 360], s: [0.1, 0.3], v: [0.7, 0.9] },
-        days: 5,
-        description: 'Pre-maduración',
-        characteristics: ['Color blanquecino', 'Inicio de dulzor', 'Ablandamiento leve']
-      },
-      madura: {
-        color: { h: [340, 20], s: [0.7, 1.0], v: [0.4, 0.8] },
-        days: 0,
-        description: 'Lista para consumo',
-        characteristics: ['Rojo intenso', 'Aroma característico', 'Textura jugosa']
-      }
-    }
-  },
-  
-  vegetal_verde: {
-    name: 'Vegetal Verde',
-    stages: {
-      joven: {
-        color: { h: [80, 120], s: [0.3, 0.6], v: [0.3, 0.6] },
-        days: 14,
-        description: 'Vegetal verde joven',
-        characteristics: ['Color verde claro', 'En crecimiento']
-      },
-      maduro: {
-        color: { h: [85, 125], s: [0.5, 1.0], v: [0.4, 0.8] },
-        days: 0,
-        description: 'Vegetal verde maduro',
-        characteristics: ['Color verde intenso', 'Listo para cosecha']
-      }
-    }
-  },
-  
-  fruto_rojo: {
-    name: 'Fruto Rojo',
-    stages: {
-      verde: {
-        color: { h: [80, 140], s: [0.3, 0.7], v: [0.2, 0.6] },
-        days: 10,
-        description: 'Fruto inmaduro',
-        characteristics: ['Color verde', 'Sin madurar']
-      },
-      maduro: {
-        color: { h: [0, 30], s: [0.6, 1.0], v: [0.4, 0.9] },
-        days: 0,
-        description: 'Fruto rojo maduro',
-        characteristics: ['Color rojo intenso', 'Listo para consumo']
-      }
-    }
-  },
-  
   cultivo_general: {
     name: 'Cultivo General',
     stages: {
@@ -178,72 +59,217 @@ class CropMaturityAnalyzer {
 
   async analyzeCropMaturity(imageElement) {
     try {
-      // Extract color features from image
+      if (!imageElement || !imageElement.width || !imageElement.height) {
+        throw new Error('Imagen inválida o no cargada correctamente');
+      }
+      
       const colorFeatures = await this.extractColorFeatures(imageElement);
       
-      // Identify crop type
-      const cropIdentification = this.identifyCropType(colorFeatures);
+      if (!colorFeatures || !colorFeatures.hsv) {
+        throw new Error('No se pudieron extraer características de color de la imagen');
+      }
       
-      // Determine maturity stage
+      const cropIdentification = this.identifyCropType(colorFeatures);
       const maturityAnalysis = this.analyzeMaturityStage(cropIdentification.crop, colorFeatures);
+      const combinedConfidence = Math.min(cropIdentification.confidence, maturityAnalysis.confidence);
       
       return {
-        valid: cropIdentification.confidence > 0.4,
-        type: cropIdentification.crop,
-        maturity: maturityAnalysis.stage,
-        confidence: Math.min(cropIdentification.confidence, maturityAnalysis.confidence),
+        valid: combinedConfidence > 0.3,
+        type: this.database[cropIdentification.crop]?.name || this.formatCropName(cropIdentification.crop),
+        maturity: maturityAnalysis.description || maturityAnalysis.stage,
+        confidence: combinedConfidence,
         daysToMaturity: maturityAnalysis.daysToMaturity,
         message: this.generateMaturityMessage(cropIdentification.crop, maturityAnalysis),
-        characteristics: maturityAnalysis.characteristics,
-        recommendations: this.getHarvestRecommendations(cropIdentification.crop, maturityAnalysis.stage)
+        characteristics: maturityAnalysis.characteristics || ['Análisis basado en características de color'],
+        recommendations: this.getHarvestRecommendations(cropIdentification.crop, maturityAnalysis.stage),
+        cropType: cropIdentification.crop,
+        stage: maturityAnalysis.stage,
+        size: colorFeatures.estimatedSize,
+        contentValidation: {
+          hasPlantContent: colorFeatures.contentAnalysis.hasPlantContent,
+          brightness: colorFeatures.contentAnalysis.averageBrightness,
+          textureComplexity: colorFeatures.contentAnalysis.textureComplexity
+        }
       };
     } catch (error) {
       console.error('Error in crop maturity analysis:', error);
       return {
         valid: false,
         confidence: 0,
-        message: 'Error al analizar la madurez del cultivo'
+        type: 'Error',
+        maturity: 'No determinado',
+        message: `Error al analizar la imagen: ${error.message}. Asegúrate de capturar una imagen clara de la planta o fruto.`,
+        characteristics: ['Error en el análisis'],
+        recommendations: ['Intenta con mejor iluminación', 'Acerca más la cámara al cultivo', 'Asegúrate de que la planta sea visible']
       };
     }
   }
 
   async extractColorFeatures(imageElement) {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      
-      canvas.width = imageElement.width || 224;
-      canvas.height = imageElement.height || 224;
-      ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
-      
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const pixels = imageData.data;
-      
-      let totalR = 0, totalG = 0, totalB = 0;
-      let pixelCount = 0;
-      
-      // Sample every 4th pixel for performance
-      for (let i = 0; i < pixels.length; i += 16) {
-        totalR += pixels[i];
-        totalG += pixels[i + 1];
-        totalB += pixels[i + 2];
-        pixelCount++;
+    return new Promise((resolve, reject) => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const maxSize = 224;
+        const aspectRatio = imageElement.width / imageElement.height;
+        
+        if (aspectRatio > 1) {
+          canvas.width = maxSize;
+          canvas.height = maxSize / aspectRatio;
+        } else {
+          canvas.width = maxSize * aspectRatio;
+          canvas.height = maxSize;
+        }
+        
+        ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const pixels = imageData.data;
+        
+        if (pixels.length === 0) {
+          throw new Error('No se pudieron obtener datos de la imagen');
+        }
+        
+        const contentAnalysis = this.analyzeImageContent(pixels, canvas.width, canvas.height);
+        
+        if (!contentAnalysis.hasPlantContent) {
+          throw new Error('No se detectó contenido vegetal en la imagen. Asegúrate de enfocar una planta o cultivo.');
+        }
+        
+        let totalR = 0, totalG = 0, totalB = 0;
+        let validPixels = 0;
+        let greenPixels = 0;
+        
+        for (let i = 0; i < pixels.length; i += 16) {
+          const r = pixels[i];
+          const g = pixels[i + 1];
+          const b = pixels[i + 2];
+          const alpha = pixels[i + 3];
+          
+          if (alpha > 128 && (r + g + b) > 45) {
+            totalR += r;
+            totalG += g;
+            totalB += b;
+            validPixels++;
+            
+            if (g > r && g > b && g > 80) {
+              greenPixels++;
+            }
+          }
+        }
+        
+        if (validPixels === 0) {
+          throw new Error('No se encontraron píxeles válidos en la imagen');
+        }
+        
+        const greenRatio = greenPixels / validPixels;
+        if (greenRatio < 0.1 && contentAnalysis.averageBrightness < 0.2) {
+          throw new Error('La imagen parece ser muy oscura o no contiene suficiente vegetación visible.');
+        }
+        
+        const avgR = totalR / validPixels / 255;
+        const avgG = totalG / validPixels / 255;
+        const avgB = totalB / validPixels / 255;
+        
+        const hsv = this.rgbToHsv(avgR, avgG, avgB);
+        
+        resolve({
+          rgb: [avgR, avgG, avgB],
+          hsv: hsv,
+          dominantColor: this.getDominantColor(avgR, avgG, avgB),
+          colorVariance: this.calculateColorVariance(pixels),
+          validPixelRatio: validPixels / (pixels.length / 4),
+          greenRatio: greenRatio,
+          contentAnalysis: contentAnalysis,
+          estimatedSize: this.estimateObjectSize(contentAnalysis, canvas.width, canvas.height)
+        });
+      } catch (error) {
+        reject(error);
       }
-      
-      const avgR = totalR / pixelCount / 255;
-      const avgG = totalG / pixelCount / 255;
-      const avgB = totalB / pixelCount / 255;
-      
-      // Convert to HSV
-      const hsv = this.rgbToHsv(avgR, avgG, avgB);
-      
-      resolve({
-        rgb: [avgR, avgG, avgB],
-        hsv: hsv,
-        dominantColor: this.getDominantColor(avgR, avgG, avgB),
-        colorVariance: this.calculateColorVariance(pixels)
-      });
     });
+  }
+
+  analyzeImageContent(pixels, width, height) {
+    let totalBrightness = 0;
+    let darkPixels = 0;
+    let colorfulPixels = 0;
+    let edgePixels = 0;
+    let pixelCount = 0;
+    
+    for (let i = 0; i < pixels.length; i += 16) {
+      const r = pixels[i] / 255;
+      const g = pixels[i + 1] / 255;
+      const b = pixels[i + 2] / 255;
+      const brightness = (r + g + b) / 3;
+      
+      totalBrightness += brightness;
+      pixelCount++;
+      
+      if (brightness < 0.1) darkPixels++;
+      
+      const colorVariation = Math.abs(r - g) + Math.abs(g - b) + Math.abs(b - r);
+      if (colorVariation > 0.1) colorfulPixels++;
+    }
+    
+    for (let y = 1; y < height - 1; y += 4) {
+      for (let x = 1; x < width - 1; x += 4) {
+        const idx = (y * width + x) * 4;
+        const current = pixels[idx];
+        const right = pixels[idx + 4];
+        const down = pixels[idx + width * 4];
+        
+        if (Math.abs(current - right) > 30 || Math.abs(current - down) > 30) {
+          edgePixels++;
+        }
+      }
+    }
+    
+    const avgBrightness = totalBrightness / pixelCount;
+    const darkRatio = darkPixels / pixelCount;
+    const colorfulRatio = colorfulPixels / pixelCount;
+    const edgeRatio = edgePixels / ((width / 4) * (height / 4));
+    
+    const hasPlantContent = (
+      avgBrightness > 0.15 &&
+      darkRatio < 0.8 &&
+      colorfulRatio > 0.2 &&
+      edgeRatio > 0.1
+    );
+    
+    return {
+      hasPlantContent,
+      averageBrightness: avgBrightness,
+      darkRatio,
+      colorfulRatio,
+      edgeRatio,
+      textureComplexity: edgeRatio
+    };
+  }
+
+  estimateObjectSize(contentAnalysis, width, height) {
+    const edgeDensity = contentAnalysis.edgeRatio;
+    const colorComplexity = contentAnalysis.colorfulRatio;
+    
+    let sizeCategory = 'medium';
+    let estimatedDiameter = 'No determinado';
+    
+    if (edgeDensity > 0.3 && colorComplexity > 0.4) {
+      sizeCategory = 'large';
+      estimatedDiameter = '> 8 cm';
+    } else if (edgeDensity > 0.15 && colorComplexity > 0.25) {
+      sizeCategory = 'medium';
+      estimatedDiameter = '4-8 cm';
+    } else if (edgeDensity > 0.05) {
+      sizeCategory = 'small';
+      estimatedDiameter = '< 4 cm';
+    }
+    
+    return {
+      category: sizeCategory,
+      estimatedDiameter,
+      confidence: Math.min(edgeDensity * 2 + colorComplexity, 1.0)
+    };
   }
 
   rgbToHsv(r, g, b) {
@@ -295,56 +321,33 @@ class CropMaturityAnalyzer {
   }
 
   identifyCropType(colorFeatures) {
-    let bestMatch = { crop: 'desconocido', confidence: 0.3 };
+    let bestMatch = { crop: 'cultivo_general', confidence: 0.4 };
     const [h, s, v] = colorFeatures.hsv;
     const dominantColor = colorFeatures.dominantColor;
     
-    // Tomato identification
     if ((h >= 0 && h <= 30) || (h >= 340 && h <= 360)) {
       if (s > 0.4 && v > 0.3) {
-        bestMatch = { crop: 'tomate', confidence: 0.85 };
+        let confidence = 0.7;
+        if (s > 0.6 && v > 0.4) confidence += 0.15;
+        bestMatch = { crop: 'tomate', confidence: Math.min(confidence, 0.9) };
       }
     }
     
-    // Lettuce identification
     if (h >= 80 && h <= 140 && s > 0.3 && v > 0.2) {
       let confidence = 0.6;
-      if (colorFeatures.colorVariance > 0.02) confidence += 0.2;
-      if (dominantColor === 'green') confidence += 0.1;
+      if (colorFeatures.colorVariance > 0.02) confidence += 0.15;
+      if (dominantColor === 'green') confidence += 0.15;
+      if (s > 0.5) confidence += 0.1;
       bestMatch = { crop: 'lechuga', confidence: Math.min(confidence, 0.9) };
     }
     
-    // Carrot identification
-    if (h >= 10 && h <= 40 && s > 0.4 && v > 0.3) {
-      let confidence = 0.65;
-      if (dominantColor === 'orange') confidence += 0.2;
-      bestMatch = { crop: 'zanahoria', confidence: Math.min(confidence, 0.85) };
-    }
-    
-    // Pepper identification
-    if ((h >= 90 && h <= 140) || (h >= 45 && h <= 65) || (h >= 0 && h <= 20)) {
-      if (s > 0.4 && v > 0.3) {
-        let confidence = 0.6;
-        if (s > 0.6) confidence += 0.1;
-        bestMatch = { crop: 'pimiento', confidence: Math.min(confidence, 0.8) };
-      }
-    }
-    
-    // Strawberry identification
-    if ((h >= 340 && h <= 360) || (h >= 0 && h <= 20)) {
-      if (s > 0.5 && v > 0.3) {
-        bestMatch = { crop: 'fresa', confidence: 0.8 };
-      }
-    }
-    
-    // Generic vegetable fallback
-    if (bestMatch.confidence < 0.5) {
-      if (dominantColor === 'green' && s > 0.3) {
-        bestMatch = { crop: 'vegetal_verde', confidence: 0.5 };
-      } else if (dominantColor === 'red' && s > 0.4) {
-        bestMatch = { crop: 'fruto_rojo', confidence: 0.5 };
-      } else if (dominantColor === 'orange' && s > 0.4) {
-        bestMatch = { crop: 'fruto_naranja', confidence: 0.5 };
+    if (bestMatch.confidence < 0.6) {
+      if (dominantColor === 'green' && s > 0.3 && v > 0.2) {
+        let confidence = 0.55;
+        if (s > 0.5) confidence += 0.1;
+        bestMatch = { crop: 'cultivo_general', confidence };
+      } else {
+        bestMatch = { crop: 'cultivo_general', confidence: 0.45 };
       }
     }
     
@@ -369,19 +372,16 @@ class CropMaturityAnalyzer {
     for (const [stageName, stageData] of Object.entries(cropData.stages)) {
       let confidence = 0;
       
-      // Check hue range
       const hRange = stageData.color.h;
       if (h >= hRange[0] && h <= hRange[1]) {
         confidence += 0.4;
       }
       
-      // Check saturation range
       const sRange = stageData.color.s;
       if (s >= sRange[0] && s <= sRange[1]) {
         confidence += 0.3;
       }
       
-      // Check value range
       const vRange = stageData.color.v;
       if (v >= vRange[0] && v <= vRange[1]) {
         confidence += 0.3;
@@ -403,14 +403,26 @@ class CropMaturityAnalyzer {
 
   generateMaturityMessage(cropType, maturityAnalysis) {
     const cropName = this.database[cropType]?.name || this.formatCropName(cropType);
+    const confidence = maturityAnalysis.confidence;
     
+    let baseMessage = '';
     if (maturityAnalysis.daysToMaturity === 0) {
-      return `${cropName} está maduro y listo para cosechar`;
+      baseMessage = `${cropName} está maduro y listo para cosechar`;
     } else if (maturityAnalysis.daysToMaturity <= 7) {
-      return `${cropName} estará listo en ${maturityAnalysis.daysToMaturity} días aproximadamente`;
+      baseMessage = `${cropName} estará listo en ${maturityAnalysis.daysToMaturity} días aproximadamente`;
     } else {
-      return `${cropName} necesita ${maturityAnalysis.daysToMaturity} días más para madurar`;
+      baseMessage = `${cropName} necesita ${maturityAnalysis.daysToMaturity} días más para madurar`;
     }
+    
+    if (confidence > 0.7) {
+      baseMessage += ' (Análisis confiable)';
+    } else if (confidence > 0.5) {
+      baseMessage += ' (Análisis moderado - verificar visualmente)';
+    } else {
+      baseMessage += ' (Análisis preliminar - requiere confirmación)';
+    }
+    
+    return baseMessage;
   }
   
   formatCropName(cropType) {
@@ -427,18 +439,11 @@ class CropMaturityAnalyzer {
     const recommendations = {
       tomate: {
         verde: ['Esperar a que cambie de color', 'Mantener riego constante', 'Proteger de heladas'],
-        pintón: ['Cosechar si hay riesgo de heladas', 'Puede madurar en interior', 'Revisar diariamente'],
         maduro: ['Cosechar inmediatamente', 'Consumir en 3-5 días', 'Almacenar a temperatura ambiente']
       },
       lechuga: {
         joven: ['Continuar cuidados básicos', 'Mantener humedad del suelo', 'Proteger de plagas'],
-        desarrollo: ['Aumentar riego ligeramente', 'Monitorear crecimiento', 'Preparar para cosecha'],
         maduro: ['Cosechar en horas frescas', 'Cortar desde la base', 'Consumir rápidamente']
-      },
-      zanahoria: {
-        inmadura: ['Mantener suelo suelto', 'Riego moderado y constante', 'Evitar fertilizantes nitrogenados'],
-        desarrollo: ['Reducir frecuencia de riego', 'Revisar desarrollo de raíz', 'Proteger de plagas del suelo'],
-        maduro: ['Cosechar antes de que se endurezcan', 'Aflojar suelo antes de extraer', 'Almacenar en lugar fresco']
       }
     };
     
