@@ -29,27 +29,58 @@ const CaptureGallery = ({ isOpen, onClose }) => {
     try {
       // Load from localStorage gallery
       const localGallery = JSON.parse(localStorage.getItem('agrosens_gallery') || '[]');
+      console.log('Local gallery loaded:', localGallery.length, 'items');
       
-      // Load from API
-      const response = await fetch('/api/ia', {
-        headers: { 'X-CSRF-Token': localStorage.getItem('csrfToken') || '' }
-      });
-      const apiData = await response.json();
+      // Load from localStorage analyses (backup)
+      const localAnalyses = JSON.parse(localStorage.getItem('agrosens_analyses') || '[]');
+      console.log('Local analyses loaded:', localAnalyses.length, 'items');
       
-      // Transform API data
-      const apiCaptures = apiData
-        .filter(item => item.image)
-        .map(item => ({
-          ...item,
-          id: item._id || item.id,
-          category: getCategoryFromVerdict(item.verdict, item.analysisMode),
-          saved: false
+      let apiCaptures = [];
+      try {
+        // Try to load from API
+        const response = await fetch('/api/ia', {
+          headers: { 'X-CSRF-Token': localStorage.getItem('csrfToken') || '' }
+        });
+        
+        if (response.ok) {
+          const apiData = await response.json();
+          apiCaptures = apiData
+            .filter(item => item.image)
+            .map(item => ({
+              ...item,
+              id: item._id || item.id,
+              category: getCategoryFromVerdict(item.verdict, item.analysisMode),
+              saved: false
+            }));
+        }
+      } catch (apiError) {
+        console.log('API not available, using local data only');
+      }
+      
+      // Transform analyses to gallery format if not already in gallery
+      const analysesAsGallery = localAnalyses
+        .filter(analysis => analysis.image && !localGallery.find(g => g.id === analysis.id))
+        .map(analysis => ({
+          _id: analysis.id,
+          id: analysis.id,
+          image: analysis.image.startsWith('data:') ? analysis.image : `data:image/jpeg;base64,${analysis.image}`,
+          category: getCategoryFromVerdict(analysis.verdict, analysis.analysisMode),
+          type: analysis.analysisMode,
+          result: analysis,
+          cultivo: analysis.cultivo,
+          verdict: analysis.verdict,
+          confidence: analysis.confidence,
+          heatmapEnabled: analysis.heatmapEnabled,
+          timestamp: analysis.timestamp,
+          createdAt: analysis.timestamp,
+          saved: true
         }));
       
-      // Combine and sort by timestamp
-      const allCaptures = [...localGallery, ...apiCaptures]
+      // Combine all sources and sort by timestamp
+      const allCaptures = [...localGallery, ...analysesAsGallery, ...apiCaptures]
         .sort((a, b) => new Date(b.timestamp || b.createdAt) - new Date(a.timestamp || a.createdAt));
       
+      console.log('Total captures loaded:', allCaptures.length);
       setCaptures(allCaptures);
     } catch (error) {
       console.error('Error loading captures:', error);
@@ -64,24 +95,45 @@ const CaptureGallery = ({ isOpen, onClose }) => {
     }
     if (verdict === 'maduro') return 'maduras';
     if (verdict === 'verde' || verdict === 'inmaduro') return 'verdes';
-    return 'desarrollo';
+    if (verdict === 'analizado' || verdict === 'en_desarrollo' || verdict === 'creciendo') return 'desarrollo';
+    return 'desarrollo'; // Default category
   };
 
   const deleteCapture = async (captureId) => {
     if (!confirm('¿Estás seguro de que quieres eliminar esta captura?')) return;
     
     try {
-      const response = await fetch(`/api/ia/${captureId}`, {
-        method: 'DELETE',
-        headers: { 'X-CSRF-Token': localStorage.getItem('csrfToken') || '' }
-      });
-      
-      if (response.ok) {
-        setCaptures(captures.filter(c => c._id !== captureId));
-        setSelectedCapture(null);
+      // Try to delete from API first
+      try {
+        const response = await fetch(`/api/ia/${captureId}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': localStorage.getItem('csrfToken') || '' }
+        });
+        
+        if (!response.ok) {
+          throw new Error('API delete failed');
+        }
+      } catch (apiError) {
+        console.log('API delete failed, removing from local storage');
       }
+      
+      // Remove from localStorage gallery
+      const localGallery = JSON.parse(localStorage.getItem('agrosens_gallery') || '[]');
+      const updatedGallery = localGallery.filter(c => c.id !== captureId && c._id !== captureId);
+      localStorage.setItem('agrosens_gallery', JSON.stringify(updatedGallery));
+      
+      // Remove from localStorage analyses
+      const localAnalyses = JSON.parse(localStorage.getItem('agrosens_analyses') || '[]');
+      const updatedAnalyses = localAnalyses.filter(c => c.id !== captureId && c._id !== captureId);
+      localStorage.setItem('agrosens_analyses', JSON.stringify(updatedAnalyses));
+      
+      // Update state
+      setCaptures(captures.filter(c => c._id !== captureId && c.id !== captureId));
+      setSelectedCapture(null);
+      
     } catch (error) {
       console.error('Error deleting capture:', error);
+      alert('Error al eliminar la captura');
     }
   };
 
@@ -108,8 +160,9 @@ const CaptureGallery = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-[95%] max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-[95%] max-w-6xl max-h-[90vh] flex flex-col">
+        <div className="h-full overflow-y-auto flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">📸 Galería de Capturas</h2>
           <div className="flex gap-2">
@@ -329,6 +382,7 @@ const CaptureGallery = ({ isOpen, onClose }) => {
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>

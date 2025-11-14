@@ -375,53 +375,51 @@ const CameraAnalysis = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 w-[90%] max-w-4xl">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">🔍 Análisis con Cámara (IA)</h3>
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-60 p-2 md:p-4" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-4xl" style={{ maxHeight: '95vh', overflow: 'auto', padding: window.innerWidth < 768 ? '12px' : '16px' }}>
+        <div className="flex justify-between items-center mb-3 md:mb-4">
+          <h3 className="text-lg md:text-xl font-bold text-gray-800 dark:text-white">🔍 Análisis IA</h3>
           <button 
             onClick={onClose}
-            className="px-3 py-1 bg-gray-300 dark:bg-gray-700 rounded"
+            className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium"
           >
-            Cerrar
+            ✕ Cerrar
           </button>
         </div>
 
         {/* Mode Toggle Buttons */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-col md:flex-row gap-2 mb-3 md:mb-4">
           <button
             onClick={() => {
               setAnalysisMode('maturity');
-              // Restart camera to avoid bugs
               setTimeout(() => startCamera(), 100);
             }}
-            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 py-2 md:py-3 px-3 md:px-4 rounded-lg font-semibold transition-colors text-sm md:text-base ${
               analysisMode === 'maturity'
                 ? 'bg-green-600 text-white'
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`}
           >
-            🌱 Análisis de Madurez
+            🌱 <span className="hidden sm:inline">Análisis de</span> Madurez
           </button>
           <button
             onClick={() => {
               setAnalysisMode('pest');
-              // Restart camera to avoid bugs
               setTimeout(() => startCamera(), 100);
             }}
-            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-colors ${
+            className={`flex-1 py-2 md:py-3 px-3 md:px-4 rounded-lg font-semibold transition-colors text-sm md:text-base ${
               analysisMode === 'pest'
                 ? 'bg-red-600 text-white'
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`}
           >
-            🐛 Detección de Plagas
+            🐛 <span className="hidden sm:inline">Detección de</span> Plagas
           </button>
         </div>
 
         {/* Maturity Analysis Interface */}
         {analysisMode === 'maturity' && (
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
             <div>
               <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg mb-3">
                 <h4 className="font-semibold text-green-800 dark:text-green-200 text-sm">🌱 Modo: Análisis de Madurez</h4>
@@ -539,7 +537,7 @@ const CameraAnalysis = ({ isOpen, onClose }) => {
 
         {/* Pest Detection Interface */}
         {analysisMode === 'pest' && (
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
             <div>
               <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg mb-3">
                 <h4 className="font-semibold text-red-800 dark:text-red-200 text-sm">🐛 Modo: Detección de Plagas</h4>

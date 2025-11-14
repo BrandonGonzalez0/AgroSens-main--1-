@@ -29,9 +29,24 @@ export default function WeatherRotator({ intervalMs = 5000 }) {
       setData({ loading: true, city: city.name });
       try {
         const w = await fetchWeatherFor(city.lat, city.lon);
-        if (mounted.current) setData({ loading: false, city: city.name, weather: w });
+        if (mounted.current) {
+          setData({ 
+            loading: false, 
+            city: city.name, 
+            weather: w,
+            lastUpdate: new Date().toLocaleTimeString()
+          });
+        }
       } catch (err) {
-        if (mounted.current) setData({ loading: false, city: city.name, error: String(err) });
+        console.error('Weather fetch error:', err);
+        if (mounted.current) {
+          setData({ 
+            loading: false, 
+            city: city.name, 
+            error: err.message || 'Error de conexión',
+            lastUpdate: new Date().toLocaleTimeString()
+          });
+        }
       }
     };
 
@@ -44,7 +59,7 @@ export default function WeatherRotator({ intervalMs = 5000 }) {
     }
 
     return () => clearInterval(timer);
-  }, [index, intervalMs]);
+  }, [index, intervalMs, paused]);
 
   const onSelectCity = (e) => {
     const idx = Number(e.target.value);
@@ -58,6 +73,33 @@ export default function WeatherRotator({ intervalMs = 5000 }) {
     setPaused(false);
     // advance to next immediately so user sees change flow
     setIndex(i => (i + 1) % CITIES.length);
+  };
+
+  const refresh = () => {
+    // Force refresh current city
+    setData({ loading: true, city: CITIES[index % CITIES.length].name });
+    const city = CITIES[index % CITIES.length];
+    fetchWeatherFor(city.lat, city.lon)
+      .then(w => {
+        if (mounted.current) {
+          setData({ 
+            loading: false, 
+            city: city.name, 
+            weather: w,
+            lastUpdate: new Date().toLocaleTimeString()
+          });
+        }
+      })
+      .catch(err => {
+        if (mounted.current) {
+          setData({ 
+            loading: false, 
+            city: city.name, 
+            error: err.message || 'Error de conexión',
+            lastUpdate: new Date().toLocaleTimeString()
+          });
+        }
+      });
   };
 
   return (
@@ -78,23 +120,53 @@ export default function WeatherRotator({ intervalMs = 5000 }) {
                 <div className="text-3xl font-bold text-green-600">{data.city} <span className="text-2xl ml-2">{data.weather && data.weather.icon}</span></div>
               </div>
               <div className="flex items-center gap-2">
-                <select value={index} onChange={onSelectCity} className="p-2 border rounded bg-white text-sm">
+                <select value={index} onChange={onSelectCity} className="p-2 border rounded bg-white dark:bg-gray-700 dark:text-white text-sm">
                   {CITIES.map((c, i) => <option key={c.name} value={i}>{c.name}</option>)}
                 </select>
+                <button onClick={refresh} className="px-2 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700" title="Actualizar">
+                  🔄
+                </button>
                 {paused ? (
-                  <button onClick={resume} className="px-3 py-1 bg-green-600 text-white rounded text-sm">Reanudar</button>
+                  <button onClick={resume} className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">▶️</button>
                 ) : (
-                  <button onClick={() => setPaused(true)} className="px-3 py-1 bg-gray-200 rounded text-sm">Pausar</button>
+                  <button onClick={() => setPaused(true)} className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600">⏸️</button>
                 )}
               </div>
             </div>
-            {data.loading && <div className="text-sm text-gray-600">Cargando clima...</div>}
-            {data.error && <div className="text-sm text-red-600">Error: {data.error}</div>}
+            {data.loading && (
+              <div className="text-sm text-gray-600 flex items-center gap-2">
+                <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                Obteniendo clima...
+              </div>
+            )}
+            {data.error && (
+              <div className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                ⚠️ {data.error}
+                {data.lastUpdate && <div className="text-xs mt-1">Último intento: {data.lastUpdate}</div>}
+              </div>
+            )}
             {data.weather && (
               <div className="mt-2">
-                <div className="text-4xl font-extrabold">{Math.round(data.weather.temperature)}°C</div>
-                <div className="text-sm text-gray-600">{data.weather.description || 'Clima actual'}</div>
-                <div className="text-xs text-gray-500 mt-1">Fuente: Open-Meteo (sin clave)</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-4xl font-extrabold">{Math.round(data.weather.temperature)}°C</div>
+                  {data.weather.humidity && (
+                    <div className="text-right text-sm text-gray-600 dark:text-gray-400">
+                      <div>💧 {Math.round(data.weather.humidity)}%</div>
+                      {data.weather.windspeed && <div>💨 {Math.round(data.weather.windspeed)} m/s</div>}
+                    </div>
+                  )}
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">{data.weather.description || 'Clima actual'}</div>
+                <div className="flex justify-between items-center mt-1">
+                  <div className="text-xs text-gray-500 dark:text-gray-500">
+                    {data.weather.source} {data.weather.expired && '(Cache)'}  {data.weather.fallback && '(Simulado)'}
+                  </div>
+                  {data.lastUpdate && (
+                    <div className="text-xs text-gray-500 dark:text-gray-500">
+                      {data.lastUpdate}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </motion.div>

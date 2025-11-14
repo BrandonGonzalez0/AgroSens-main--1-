@@ -27,6 +27,7 @@ import cultivosRoutes from "./routes/cultivos.js";
 import recomendacionesRoutes from "./routes/recomendaciones.js";
 import usuariosRoutes from "./routes/usuarios.js";
 import alertasRoutes from "./routes/alertas.js";
+import weatherRoutes from "./routes/weather.js";
 
 dotenv.config();
 console.log("MONGO_URI:", process.env.MONGO_URI || process.env.MONGODB_URI);
@@ -138,6 +139,7 @@ const start = async () => {
   app.use('/api/recomendaciones', csrfProtection, recomendacionesRoutes);
   app.use('/api/usuarios', strictRateLimit, csrfProtection, usuariosRoutes);
   app.use('/api/alertas', csrfProtection, alertasRoutes);
+  app.use('/api/weather', weatherRoutes);
   
   // Health check endpoints
   app.get('/health', (req, res) => {

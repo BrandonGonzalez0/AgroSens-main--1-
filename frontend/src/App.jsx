@@ -13,7 +13,7 @@ import CropSelectionDashboard from './CropSelectionDashboard';
 import CropValidationResult from './CropValidationResult';
 import CropTracker from './CropTracker';
 import GeoTerrainSimulator from './GeoTerrainSimulator';
-import Navigation from './Navigation';
+
 import NotificationSystem, { showNotification } from './NotificationSystem';
 import cultivosDB from "./data/cultivos.json";
 import { enqueueItem, getPendingItems, addReadingLocally } from './lib/offlineDB';
@@ -142,12 +142,25 @@ function App() {
   const [showValidationResult, setShowValidationResult] = useState(false);
   const [showCropTracker, setShowCropTracker] = useState(false);
   const [showGeoTerrainSimulator, setShowGeoTerrainSimulator] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [now, setNow] = useState(new Date());
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallManual, setShowInstallManual] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [backendConnected, setBackendConnected] = useState(false);
+  const [recentActivity, setRecentActivity] = useState([]);
+
+  const addActivity = (type, description, icon = '🌱') => {
+    const activity = {
+      id: Date.now(),
+      type,
+      description,
+      icon,
+      timestamp: new Date()
+    };
+    setRecentActivity(prev => [activity, ...prev.slice(0, 4)]);
+  };
 
   // Auto-fill sensor data when available
   useEffect(() => {
@@ -167,7 +180,10 @@ function App() {
     // Monitor backend connection
     const unsubscribe = onConnectionChange((status, data) => {
       setBackendConnected(status === 'connected');
+      addActivity('connection', status === 'connected' ? 'Servidor conectado' : 'Modo local activado', status === 'connected' ? '🟢' : '🟡');
     });
+
+    addActivity('system', 'Sistema AgroSens iniciado', '🌱');
 
     // Initialize CSRF token
     connectionManager.initializeCSRF();
@@ -231,6 +247,7 @@ function App() {
   }, [darkMode]);
 
   const handleValidar = async () => {
+    addActivity('validation', `Validando cultivo: ${cultivo}`, '✅');
     // Sanitize inputs
     const sanitizedCultivo = sanitizeInput(cultivo);
     const sanitizedPh = sanitizeInput(ph);
@@ -294,6 +311,7 @@ function App() {
   };
 
   const handleSugerir = () => {
+    addActivity('suggestion', 'Buscando cultivos compatibles', '🌱');
     // Sanitize and validate inputs
     const sanitizedPh = sanitizeInput(ph);
     const sanitizedHumedad = sanitizeInput(humedad);
@@ -430,7 +448,10 @@ function App() {
         <div className="max-w-7xl mx-auto px-6 pb-12">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12">
             <motion.button
-              onClick={() => setShowCameraAnalysis(true)}
+              onClick={() => {
+                setShowCameraAnalysis(true);
+                addActivity('feature', 'Análisis IA abierto desde inicio', '🔍');
+              }}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
@@ -447,7 +468,10 @@ function App() {
             </motion.button>
 
             <motion.button
-              onClick={() => setShowTelemetry(true)}
+              onClick={() => {
+                setShowTelemetry(true);
+                addActivity('feature', 'Dashboard abierto desde inicio', '📊');
+              }}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
@@ -464,7 +488,10 @@ function App() {
             </motion.button>
 
             <motion.button
-              onClick={() => setShowCaptureGallery(true)}
+              onClick={() => {
+                setShowCaptureGallery(true);
+                addActivity('feature', 'Galería abierta desde inicio', '📸');
+              }}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
@@ -481,7 +508,10 @@ function App() {
             </motion.button>
 
             <motion.button
-              onClick={() => setShowCropTracker(true)}
+              onClick={() => {
+                setShowCropTracker(true);
+                addActivity('feature', 'Seguimiento abierto desde inicio', '📋');
+              }}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
@@ -498,7 +528,10 @@ function App() {
             </motion.button>
 
             <motion.button
-              onClick={() => setShowGeoTerrainSimulator(true)}
+              onClick={() => {
+                setShowGeoTerrainSimulator(true);
+                addActivity('feature', 'Terreno GPS abierto desde inicio', '🌍');
+              }}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
@@ -550,7 +583,10 @@ function App() {
                 </div>
                 
                 <button
-                  onClick={() => setModo('definido')}
+                  onClick={() => {
+                    setModo('definido');
+                    addActivity('mode', 'Modo Cultivo Definido seleccionado', '🌱');
+                  }}
                   className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl"
                 >
                   Comenzar Validación
@@ -592,7 +628,10 @@ function App() {
                 </div>
                 
                 <button
-                  onClick={() => setModo('sugerido')}
+                  onClick={() => {
+                    setModo('sugerido');
+                    addActivity('mode', 'Modo Cultivo Sugerido seleccionado', '🤝');
+                  }}
                   className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl"
                 >
                   Obtener Sugerencias
@@ -608,33 +647,23 @@ function App() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-100 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Actividad Reciente</h3>
               <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                    <span className="text-sm">🌱</span>
+                {recentActivity.length > 0 ? recentActivity.map((activity) => (
+                  <div key={activity.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                      <span className="text-sm">{activity.icon}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800 dark:text-white">{activity.description}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {activity.timestamp.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-800 dark:text-white">Sistema iniciado</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Hace unos momentos</p>
+                )) : (
+                  <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                    <p className="text-sm">No hay actividad reciente</p>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                    <span className="text-sm">📊</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-800 dark:text-white">Dashboard listo</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Datos actualizados</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                    <span className="text-sm">🔍</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-800 dark:text-white">IA disponible</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Análisis en tiempo real</p>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -644,7 +673,12 @@ function App() {
         <NotificationSystem />
         <InstallPromptIOS />
         <CameraAnalysis isOpen={showCameraAnalysis} onClose={() => setShowCameraAnalysis(false)} />
-        <TelemetryDashboard isOpen={showTelemetry} onClose={() => setShowTelemetry(false)} />
+        <TelemetryDashboard 
+          isOpen={showTelemetry} 
+          onClose={() => setShowTelemetry(false)}
+          backendConnected={backendConnected}
+          recentActivity={recentActivity}
+        />
         <CaptureGallery isOpen={showCaptureGallery} onClose={() => setShowCaptureGallery(false)} />
         <CropTracker isOpen={showCropTracker} onClose={() => setShowCropTracker(false)} />
         <GeoTerrainSimulator isOpen={showGeoTerrainSimulator} onClose={() => setShowGeoTerrainSimulator(false)} />
@@ -654,23 +688,32 @@ function App() {
 
   // Formulario común
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-all duration-500">
-      <Navigation
-        currentMode={modo}
-        onModeChange={(newMode) => {
-          setModo(newMode);
-          setResultado(null);
-        }}
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode(!darkMode)}
-        isOnline={isOnline}
-        onInstallClick={onManualInstallClick}
-        onShowCamera={() => setShowCameraAnalysis(true)}
-        onShowDashboard={() => setShowTelemetry(true)}
-        onShowGallery={() => setShowCaptureGallery(true)}
-      />
+    <div className="fixed inset-0 bg-gradient-to-br from-green-50 via-blue-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-all duration-500 overflow-hidden">
+      {/* Mobile Header */}
+      <div className="md:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+        <div className="flex items-center justify-between p-4">
+          <button
+            onClick={() => { setModo(null); setResultado(null); }}
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-300"
+          >
+            ⬅️ <span className="text-sm font-medium">Inicio</span>
+          </button>
+          <h1 className="text-lg font-bold text-gray-800 dark:text-white">
+            {modo === "definido" ? "🌱 Validar" : "🤝 Sugerir"}
+          </h1>
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
       
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      {/* Desktop Header */}
+      <div className="hidden md:block max-w-7xl mx-auto px-6 py-6">
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={() => { setModo(null); setResultado(null); }}
@@ -691,28 +734,34 @@ function App() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-7xl mx-auto px-6 py-8">
         {modo === "definido" ? (
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2">
-              <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
-                <div className="mb-8">
-                  <div className="flex justify-between items-center mb-4">
-                    <div>
-                      <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">Datos del Cultivo</h2>
-                      <p className="text-gray-600 dark:text-gray-300">Completa la información para validar las condiciones</p>
+              <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100 dark:border-gray-700">
+                <div className="mb-6 md:mb-8">
+                  <div className="text-center md:text-left mb-4">
+                    <div className="w-12 h-12 md:w-16 md:h-16 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center mx-auto md:mx-0 mb-4">
+                      <span className="text-2xl md:text-3xl">🌱</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${
-                        sensorData.isConnected 
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                          : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                      }`}>
-                        <div className={`w-2 h-2 rounded-full ${
-                          sensorData.isConnected ? 'bg-green-500' : 'bg-red-500'
-                        }`}></div>
-                        {sensorData.isConnected ? 'Arduino conectado' : 'Arduino desconectado'}
-                      </div>
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white mb-2">Validación de Cultivo</h2>
+                    <p className="text-sm md:text-base text-gray-600 dark:text-gray-300">Completa la información para validar las condiciones</p>
+                  </div>
+                  
+                  <div className="flex flex-col items-center gap-2 mt-4">
+                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${
+                      sensorData.isConnected 
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                    }`}>
+                      <div className={`w-2 h-2 rounded-full ${
+                        sensorData.isConnected ? 'bg-green-500' : 'bg-red-500'
+                      }`}></div>
+                      <span className="hidden sm:inline">{sensorData.isConnected ? 'Arduino conectado' : 'Arduino desconectado'}</span>
+                      <span className="sm:hidden">{sensorData.isConnected ? 'Conectado' : 'Desconectado'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={toggleAutoMode}
                         className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
@@ -729,27 +778,28 @@ function App() {
                           disabled={sensorData.isLoading}
                           className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs hover:bg-green-700 disabled:opacity-50"
                         >
-                          {sensorData.isLoading ? '⏳' : '🔄'} Obtener
+                          {sensorData.isLoading ? '⏳' : '🔄'}
                         </button>
                       )}
                     </div>
                   </div>
+                  
                   {sensorData.lastUpdate && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
                       Última actualización: {sensorData.lastUpdate.toLocaleString('es-ES')}
                     </p>
                   )}
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="md:col-span-2">
+                <div className="space-y-4 md:space-y-6">
+                  <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                       🌱 Selecciona el cultivo
                     </label>
                     <select 
                       value={cultivo} 
                       onChange={(e) => setCultivo(e.target.value)} 
-                      className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl p-3 md:p-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all text-sm md:text-base"
                     >
                       <option value="">-- Elige un cultivo --</option>
                       {cultivos.map(c => (
@@ -871,15 +921,15 @@ function App() {
           </div>
         ) : (
           <div className="max-w-2xl mx-auto">
-            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <span className="text-3xl">🤝</span>
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100 dark:border-gray-700">
+              <div className="text-center mb-6 md:mb-8">
+                <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl md:text-3xl">🤝</span>
                 </div>
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Condiciones Disponibles</h2>
-                <p className="text-gray-600 dark:text-gray-300">Ingresa las condiciones de tu terreno y te sugeriremos los mejores cultivos</p>
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white mb-2">Condiciones Disponibles</h2>
+                <p className="text-sm md:text-base text-gray-600 dark:text-gray-300">Ingresa las condiciones de tu terreno y te sugeriremos los mejores cultivos</p>
                 
-                <div className="flex justify-center items-center gap-3 mt-4">
+                <div className="flex flex-col items-center gap-2 mt-4">
                   <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${
                     sensorData.isConnected 
                       ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
@@ -888,27 +938,30 @@ function App() {
                     <div className={`w-2 h-2 rounded-full ${
                       sensorData.isConnected ? 'bg-green-500' : 'bg-red-500'
                     }`}></div>
-                    {sensorData.isConnected ? 'Arduino conectado' : 'Arduino desconectado'}
+                    <span className="hidden sm:inline">{sensorData.isConnected ? 'Arduino conectado' : 'Arduino desconectado'}</span>
+                    <span className="sm:hidden">{sensorData.isConnected ? 'Conectado' : 'Desconectado'}</span>
                   </div>
-                  <button
-                    onClick={toggleAutoMode}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                      autoMode 
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    {autoMode ? '🤖 Auto' : '✋ Manual'}
-                  </button>
-                  {!autoMode && (
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={fetchSensorData}
-                      disabled={sensorData.isLoading}
-                      className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs hover:bg-green-700 disabled:opacity-50"
+                      onClick={toggleAutoMode}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        autoMode 
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300'
+                      }`}
                     >
-                      {sensorData.isLoading ? '⏳' : '🔄'} Obtener
+                      {autoMode ? '🤖 Auto' : '✋ Manual'}
                     </button>
-                  )}
+                    {!autoMode && (
+                      <button
+                        onClick={fetchSensorData}
+                        disabled={sensorData.isLoading}
+                        className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {sensorData.isLoading ? '⏳' : '🔄'}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 
                 {sensorData.lastUpdate && (
@@ -918,7 +971,7 @@ function App() {
                 )}
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-4 md:space-y-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                     🧪 pH del suelo
@@ -996,7 +1049,7 @@ function App() {
               <motion.button
                 onClick={handleSugerir}
                 disabled={!ph || !humedad || !temperatura}
-                className="w-full mt-8 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
+                className="w-full mt-6 md:mt-8 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-3 md:py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:cursor-not-allowed text-sm md:text-base"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -1008,7 +1061,52 @@ function App() {
           </div>
         )}
 
-        <div className="mt-8">
+        {/* Mobile Menu */}
+        <div className="md:hidden mb-6">
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700"
+          >
+            <span className="text-lg font-semibold text-gray-800 dark:text-white">Acciones Rápidas</span>
+            <svg className={`w-5 h-5 transition-transform ${mobileMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {mobileMenuOpen && (
+            <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => { setShowCameraAnalysis(true); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg text-sm"
+                >
+                  🔍 IA
+                </button>
+                <button 
+                  onClick={() => { setShowTelemetry(true); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                >
+                  📊 Dashboard
+                </button>
+                <button 
+                  onClick={() => { setShowCaptureGallery(true); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm"
+                >
+                  📸 Galería
+                </button>
+                <button 
+                  onClick={() => { setShowGeoTerrainSimulator(true); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-2 bg-teal-600 text-white rounded-lg text-sm"
+                >
+                  🌍 GPS
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop Actions */}
+        <div className="mt-8 hidden md:block">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-100 dark:border-gray-700">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Acciones Rápidas</h3>
@@ -1025,31 +1123,46 @@ function App() {
             </div>
             <div className="flex flex-wrap justify-center gap-3">
               <button 
-                onClick={() => setShowCameraAnalysis(true)} 
+                onClick={() => {
+                  setShowCameraAnalysis(true);
+                  addActivity('feature', 'Análisis IA abierto', '🔍');
+                }} 
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
                 🔍 Análisis IA
               </button>
               <button 
-                onClick={() => setShowTelemetry(true)} 
+                onClick={() => {
+                  setShowTelemetry(true);
+                  addActivity('feature', 'Dashboard de telemetría abierto', '📊');
+                }} 
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
                 📊 Dashboard
               </button>
               <button 
-                onClick={() => setShowCaptureGallery(true)} 
+                onClick={() => {
+                  setShowCaptureGallery(true);
+                  addActivity('feature', 'Galería de capturas abierta', '📸');
+                }} 
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
                 📸 Galería
               </button>
               <button 
-                onClick={() => setShowCropTracker(true)} 
+                onClick={() => {
+                  setShowCropTracker(true);
+                  addActivity('feature', 'Seguimiento de cultivos abierto', '📋');
+                }} 
                 className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
                 📋 Seguimiento
               </button>
               <button 
-                onClick={() => setShowGeoTerrainSimulator(true)} 
+                onClick={() => {
+                  setShowGeoTerrainSimulator(true);
+                  addActivity('feature', 'Simulador de terreno GPS abierto', '🌍');
+                }} 
                 className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
                 🌍 Terreno GPS
@@ -1057,12 +1170,18 @@ function App() {
             </div>
           </div>
         </div>
+        </div>
       </div>
 
       <NotificationSystem />
       <InstallPromptIOS />
       <CameraAnalysis isOpen={showCameraAnalysis} onClose={() => setShowCameraAnalysis(false)} />
-      <TelemetryDashboard isOpen={showTelemetry} onClose={() => setShowTelemetry(false)} />
+      <TelemetryDashboard 
+        isOpen={showTelemetry} 
+        onClose={() => setShowTelemetry(false)}
+        backendConnected={backendConnected}
+        recentActivity={recentActivity}
+      />
       <CaptureGallery isOpen={showCaptureGallery} onClose={() => setShowCaptureGallery(false)} />
       <CropTracker isOpen={showCropTracker} onClose={() => setShowCropTracker(false)} />
       
