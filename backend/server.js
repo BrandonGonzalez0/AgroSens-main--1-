@@ -9,7 +9,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
-import { csrfProtection, generateCSRFToken } from './middleware/csrf.js';
+import { validateCSRFToken, getCSRFToken } from './middleware/csrf.js';
 import { sanitizeInput } from './middleware/validation.js';
 import { 
   progressiveRateLimit, 
@@ -60,22 +60,31 @@ const start = async () => {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'"],
-        fontSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+        scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "https://api.open-meteo.com", "https://api.weatherapi.com"],
+        fontSrc: ["'self'", "data:"],
         objectSrc: ["'none'"],
-        mediaSrc: ["'self'"],
-        frameSrc: ["'none'"]
+        mediaSrc: ["'self'", "blob:"],
+        frameSrc: ["'none'"],
+        workerSrc: ["'self'", "blob:"],
+        manifestSrc: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
       }
     },
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     hsts: {
       maxAge: 31536000,
       includeSubDomains: true,
       preload: true
-    }
+    },
+    noSniff: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
   }));
   
   // Progressive rate limiting
@@ -87,9 +96,14 @@ const start = async () => {
     optionsSuccessStatus: 200
   }));
   
-  // Session configuration
+  // Session configuration with mandatory secret
+  if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
+    console.error('CRITICAL: SESSION_SECRET environment variable is not set in production!');
+    process.exit(1);
+  }
+  
   app.use(session({
-    secret: process.env.SESSION_SECRET || 'fallback-secret-change-in-production',
+    secret: process.env.SESSION_SECRET || `temp-dev-secret-${Date.now()}-${Math.random()}`,
     resave: false,
     saveUninitialized: false,
     store: dbConnection ? MongoStore.create({
@@ -121,11 +135,7 @@ const start = async () => {
   app.use('/models', express.static(path.resolve(PUBLIC_MODELS_DIR)));
 
   // CSRF token endpoint
-  app.get('/api/csrf-token', (req, res) => {
-    const token = generateCSRFToken();
-    req.session.csrfToken = token;
-    res.json({ csrfToken: token });
-  });
+  app.get('/api/csrf-token', getCSRFToken);
   
   app.get('/', (req, res) => {
     res.json({ message: '¡Servidor de AgroSens en funcionamiento!', status: 'healthy' });
@@ -133,12 +143,12 @@ const start = async () => {
 
   // Rutas principales con protección CSRF para operaciones de escritura
   app.use('/api/sensores', sensoresRoutes);
-  app.use('/api/ia', csrfProtection, iaRoutes);
+  app.use('/api/ia', validateCSRFToken, iaRoutes);
   app.use('/api/models', modelsRoutes);
   app.use('/api/cultivos', cultivosRoutes);
-  app.use('/api/recomendaciones', csrfProtection, recomendacionesRoutes);
-  app.use('/api/usuarios', strictRateLimit, csrfProtection, usuariosRoutes);
-  app.use('/api/alertas', csrfProtection, alertasRoutes);
+  app.use('/api/recomendaciones', validateCSRFToken, recomendacionesRoutes);
+  app.use('/api/usuarios', strictRateLimit, validateCSRFToken, usuariosRoutes);
+  app.use('/api/alertas', validateCSRFToken, alertasRoutes);
   app.use('/api/weather', weatherRoutes);
   
   // Health check endpoints

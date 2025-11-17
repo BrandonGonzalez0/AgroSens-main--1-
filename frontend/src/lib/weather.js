@@ -3,27 +3,48 @@ const weatherCache = new Map();
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
 export async function fetchWeatherFor(lat, lon) {
-  // Validate coordinates to prevent SSRF
+  // Strict coordinate validation to prevent SSRF
   const latitude = parseFloat(lat);
   const longitude = parseFloat(lon);
   
-  if (isNaN(latitude) || isNaN(longitude) || 
-      latitude < -90 || latitude > 90 || 
-      longitude < -180 || longitude > 180) {
-    throw new Error('Invalid coordinates');
+  // Validate numeric conversion
+  if (isNaN(latitude) || isNaN(longitude)) {
+    throw new Error('Invalid coordinate format');
   }
   
-  // Try backend API first (avoids CORS issues)
+  // Validate coordinate ranges
+  if (latitude < -90 || latitude > 90 || 
+      longitude < -180 || longitude > 180) {
+    throw new Error('Coordinates out of valid range');
+  }
+  
+  // Prevent precision attacks
+  if (Math.abs(latitude % 0.0001) < 0.00001 || Math.abs(longitude % 0.0001) < 0.00001) {
+    // Round to reasonable precision
+    latitude = Math.round(latitude * 10000) / 10000;
+    longitude = Math.round(longitude * 10000) / 10000;
+  }
+  
+  // Try backend API first (avoids CORS issues and centralizes security)
   try {
     const backendUrl = import.meta.env.PROD ? 
       (import.meta.env.VITE_API_URL || 'http://localhost:5000') : '';
-    const endpoint = `${backendUrl}/api/weather/${latitude}/${longitude}`;
     
-    const response = await fetch(endpoint, {
+    // Sanitize URL construction
+    const endpoint = `${backendUrl}/api/weather/${encodeURIComponent(latitude)}/${encodeURIComponent(longitude)}`;
+    
+    // Validate URL before fetching
+    const url = new URL(endpoint, window.location.origin);
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error('Invalid protocol');
+    }
+    
+    const response = await fetch(url.toString(), {
       headers: {
         'Accept': 'application/json'
       },
-      signal: AbortSignal.timeout(3000) // Shorter timeout
+      signal: AbortSignal.timeout(3000), // Shorter timeout
+      credentials: 'omit' // No credentials for weather API
     });
     
     if (response.ok) {
@@ -31,7 +52,8 @@ export async function fetchWeatherFor(lat, lon) {
       return data;
     }
   } catch (error) {
-    // Backend unavailable, continue to direct APIs
+    // Backend unavailable, continue to fallback
+    console.warn('Backend weather API unavailable, using fallback');
   }
   
   // Fallback to direct API calls

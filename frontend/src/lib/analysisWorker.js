@@ -13,8 +13,8 @@ const loadTfAndMobilenet = async () => {
   try {
     // notify main thread that loading starts
     try { self.postMessage({ status: 'model-loading' }); } catch (e) {}
-    importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js');
-    importScripts('https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js');
+    importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js');
+    importScripts('https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js');
     tfLoaded = true;
     try { self.postMessage({ status: 'model-loaded', model: 'mobilenet' }); } catch (e) {}
   } catch (e) {

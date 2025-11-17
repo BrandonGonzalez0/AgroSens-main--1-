@@ -61,8 +61,18 @@ const validateFileSignature = (buffer, mimeType) => {
   return true;
 };
 
-// Enhanced file validation
+// Enhanced file validation with stricter checks
 const validateFile = async (file, buffer) => {
+  // Check file size
+  if (buffer.length > MAX_FILE_SIZE) {
+    throw new Error('File size exceeds limit');
+  }
+  
+  // Check for minimum file size (avoid empty or too small files)
+  if (buffer.length < 100) {
+    throw new Error('File too small, possible manipulation');
+  }
+  
   // Check file extension
   const ext = path.extname(file.originalname).toLowerCase();
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
@@ -77,18 +87,53 @@ const validateFile = async (file, buffer) => {
   // Validate file signature using file-type library
   const fileType = await fileTypeFromBuffer(buffer);
   if (!fileType || !ALLOWED_MIME_TYPES.includes(fileType.mime)) {
-    throw new Error('Invalid file signature');
+    throw new Error('Invalid file signature or type mismatch');
   }
   
-  // Additional signature validation
+  // Additional signature validation (magic bytes)
   if (!validateFileSignature(buffer, fileType.mime)) {
-    throw new Error('File signature mismatch');
+    throw new Error('File signature validation failed');
   }
   
-  // Check for embedded scripts or malicious content
-  const content = buffer.toString('utf8', 0, Math.min(1024, buffer.length));
-  if (content.includes('<script') || content.includes('javascript:') || content.includes('<?php')) {
-    throw new Error('Potentially malicious file content detected');
+  // Cross-check extension with detected MIME type
+  const expectedExts = {
+    'image/jpeg': ['.jpg', '.jpeg'],
+    'image/png': ['.png'],
+    'image/gif': ['.gif'],
+    'image/webp': ['.webp']
+  };
+  
+  if (!expectedExts[fileType.mime]?.includes(ext)) {
+    throw new Error('File extension does not match content type');
+  }
+  
+  // Check for embedded scripts or malicious content in file headers
+  const headerContent = buffer.toString('utf8', 0, Math.min(2048, buffer.length));
+  const maliciousPatterns = [
+    /<script/i,
+    /javascript:/i,
+    /<\?php/i,
+    /<%/,
+    /on(load|error|click|mouse)/i,
+    /data:text\/html/i,
+    /eval\(/i,
+    /expression\(/i
+  ];
+  
+  for (const pattern of maliciousPatterns) {
+    if (pattern.test(headerContent)) {
+      throw new Error('Potentially malicious content detected in file');
+    }
+  }
+  
+  // Check for polyglot files (files that are valid in multiple formats)
+  const firstBytes = Array.from(buffer.slice(0, 10));
+  const hasMultipleSignatures = Object.values(FILE_SIGNATURES).filter(sig => {
+    return sig.every((byte, idx) => firstBytes[idx] === byte);
+  }).length > 1;
+  
+  if (hasMultipleSignatures) {
+    throw new Error('Polyglot file detected');
   }
   
   return true;

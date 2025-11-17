@@ -23,12 +23,19 @@ export const adminIPFilter = (req, res, next) => {
   });
 };
 
-// Progressive rate limiting - increases delay with repeated violations
+// Progressive rate limiting by IP - increases delay with repeated violations
 export const progressiveRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Use X-Forwarded-For if behind proxy, otherwise use connection IP
+    return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+           req.ip || 
+           req.connection.remoteAddress || 
+           'unknown';
+  },
   handler: (req, res) => {
     const retryAfter = Math.round(req.rateLimit.resetTime / 1000) || 1;
     res.set('Retry-After', retryAfter);
@@ -44,12 +51,18 @@ export const progressiveRateLimit = rateLimit({
   }
 });
 
-// Strict rate limiting for sensitive operations
+// Strict rate limiting for sensitive operations with IP tracking
 export const strictRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+           req.ip || 
+           req.connection.remoteAddress || 
+           'unknown';
+  },
   handler: (req, res) => {
     res.status(429).json({
       error: 'Too many sensitive requests',

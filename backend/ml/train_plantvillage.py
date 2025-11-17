@@ -20,7 +20,6 @@ Este script hace transfer learning con MobileNetV2 y guarda un SavedModel listo 
 import os
 import argparse
 import tensorflow as tf
-import tensorflow_hub as hub
 import numpy as np
 import logging
 
@@ -37,7 +36,12 @@ except ImportError as e:
 
 
 def build_model(num_classes, img_size=224):
-    base = tf.keras.applications.MobileNetV2(input_shape=(img_size, img_size, 3), include_top=False, weights='imagenet')
+    # TensorFlow 2.15: usar 'imagenet' en weights
+    base = tf.keras.applications.MobileNetV2(
+        input_shape=(img_size, img_size, 3), 
+        include_top=False, 
+        weights='imagenet'
+    )
     base.trainable = False
     inputs = tf.keras.Input(shape=(img_size, img_size, 3))
     x = base(inputs, training=False)
@@ -128,7 +132,9 @@ def main():
 
     num_classes = len(class_names) if class_names else 2
     model = build_model(num_classes=num_classes, img_size=args.img_size)
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=args.learning_rate), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    # Usar categorical_crossentropy si num_classes > 2, sino binary_crossentropy
+    loss_fn = 'binary_crossentropy' if num_classes == 2 else 'sparse_categorical_crossentropy'
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=args.learning_rate), loss=loss_fn, metrics=['accuracy'])
 
     callbacks = [
         tf.keras.callbacks.ModelCheckpoint(os.path.join(args.output_dir, 'ckpt_{epoch}'), save_weights_only=False, save_best_only=False),

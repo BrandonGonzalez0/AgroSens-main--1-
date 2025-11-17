@@ -1,0 +1,4 @@
+tensorflow>=2.13.0
+tensorflow-datasets>=4.9.0
+numpy>=1.21.0
+pillow>=8.3.0

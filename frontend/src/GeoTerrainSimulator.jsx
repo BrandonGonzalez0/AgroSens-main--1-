@@ -23,7 +23,7 @@ const GeoTerrainSimulator = ({ isOpen, onClose }) => {
       loadLeafletMap();
     }
     
-    // Load saved terrains from localStorage
+    // aqui se guarda los datos locales en localStorage
     if (isOpen) {
       const saved = localStorage.getItem('agrosens_saved_terrains');
       if (saved) {
@@ -114,7 +114,7 @@ const GeoTerrainSimulator = ({ isOpen, onClose }) => {
       }
     }));
     
-    // Refresh map to show new sensor
+    // Refrecar mapa para nuevo sensor
     setTimeout(() => {
       if (leafletMapRef.current && terrain) {
         leafletMapRef.current.remove();
