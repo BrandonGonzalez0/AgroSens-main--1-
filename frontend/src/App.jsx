@@ -734,10 +734,10 @@ function App() {
         </div>
       </div>
 
-      <div className="h-full overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="h-full overflow-y-auto pb-20">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-8">
         {modo === "definido" ? (
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid lg:grid-cols-3 gap-6 md:gap-8">
             <div className="lg:col-span-2">
               <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-4 md:p-8 border border-gray-100 dark:border-gray-700">
                 <div className="mb-6 md:mb-8">
@@ -897,7 +897,7 @@ function App() {
             </div>
 
             <div className="lg:col-span-1">
-              <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-700 sticky top-8">
+              <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-4 md:p-6 border border-gray-100 dark:border-gray-700 lg:sticky lg:top-8 max-h-screen lg:max-h-[calc(100vh-6rem)] overflow-y-auto">
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Vista Previa</h3>
                 {cultivo ? (
                   (() => {
@@ -1061,8 +1061,8 @@ function App() {
           </div>
         )}
 
-        {/* Mobile Menu */}
-        <div className="md:hidden mb-6">
+        {/* Mobile Menu - Acciones Rápidas */}
+        <div className="md:hidden mb-4">
           <button 
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700"
@@ -1105,9 +1105,9 @@ function App() {
           )}
         </div>
 
-        {/* Desktop Actions */}
-        <div className="mt-8 hidden md:block">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-100 dark:border-gray-700">
+        {/* Desktop Actions - Acciones Rápidas */}
+        <div className="mt-6 hidden md:block">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 md:p-6 border border-gray-100 dark:border-gray-700">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Acciones Rápidas</h3>
               <div className={`flex items-center gap-2 text-xs px-2 py-1 rounded-full ${
