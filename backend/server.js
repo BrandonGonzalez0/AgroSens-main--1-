@@ -26,6 +26,7 @@ import modelsRoutes from "./routes/models.js";
 import cultivosRoutes from "./routes/cultivos.js";
 import recomendacionesRoutes from "./routes/recomendaciones.js";
 import usuariosRoutes from "./routes/usuarios.js";
+import authRoutes from "./routes/auth.js";
 import alertasRoutes from "./routes/alertas.js";
 import weatherRoutes from "./routes/weather.js";
 
@@ -46,6 +47,54 @@ const start = async () => {
   } catch (err) {
     console.error('Advertencia: fallo al conectar a la base de datos:', err.message || err);
     dbConnection = null;
+  }
+
+  // Auto-seed de usuarios: crea colección, índice y usuarios iniciales
+  async function ensureUsersSeed(connection) {
+    try {
+      if (!connection) return;
+      const shouldSeed = process.env.AUTO_SEED_USERS === 'true' || (process.env.NODE_ENV !== 'production');
+      if (!shouldSeed) return;
+      const native = connection.db;
+      const collName = 'users';
+      const exists = await native.listCollections({ name: collName }).toArray();
+      if (exists.length === 0) {
+        await native.createCollection(collName);
+        console.log(`Colección ${collName} creada`);
+      }
+      await native.collection(collName).createIndex({ email: 1 }, { unique: true });
+      const seedUsers = [
+        {
+          nombre: 'Administrador AgroSens',
+          email: 'admin@agrosens.cl',
+          password_hash: '$2a$10$ZSEjP8YpQjIfaMqkD1KQ9Oj6gRuP7apGACR6Ujx9E4RyqMG4Pbe8m',
+          rol: 'admin',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          nombre: 'Agricultor Demo',
+          email: 'agricultor@agrosens.cl',
+          password_hash: '$2a$10$rJMVxJUE8eD9JhE7KwJGOuBIqbl9Yqk3j0d8JwRr0ZSwa6CBGqD12',
+          rol: 'agricultor',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ];
+      for (const u of seedUsers) {
+        const found = await native.collection(collName).findOne({ email: u.email });
+        if (!found) {
+          await native.collection(collName).insertOne(u);
+          console.log(`Usuario sembrado: ${u.email}`);
+        }
+      }
+    } catch (e) {
+      console.warn('Auto-seed users falló:', e?.message || e);
+    }
+  }
+
+  if (dbConnection) {
+    await ensureUsersSeed(dbConnection);
   }
 
   const app = express();
@@ -91,7 +140,7 @@ const start = async () => {
   app.use(progressiveRateLimit);
   
   app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     credentials: true,
     optionsSuccessStatus: 200
   }));
@@ -121,7 +170,8 @@ const start = async () => {
     limit: '5mb',
     verify: (req, res, buf) => {
       try {
-        JSON.parse(buf);
+        if (!buf || buf.length === 0) return; // allow empty bodies
+        JSON.parse(buf.toString());
       } catch (e) {
         throw new Error('Invalid JSON');
       }
@@ -143,6 +193,7 @@ const start = async () => {
 
   // Rutas principales con protección CSRF para operaciones de escritura
   app.use('/api/sensores', sensoresRoutes);
+  app.use('/api/auth', authRoutes);
   app.use('/api/ia', validateCSRFToken, iaRoutes);
   app.use('/api/models', modelsRoutes);
   app.use('/api/cultivos', cultivosRoutes);

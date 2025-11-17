@@ -46,6 +46,8 @@ export const progressiveRateLimit = rateLimit({
     });
   },
   skip: (req) => {
+    // Skip in development to avoid blocking local testing
+    if (process.env.NODE_ENV !== 'production') return true;
     // Skip rate limiting for health checks
     return req.path === '/' || req.path === '/health';
   }
@@ -68,7 +70,8 @@ export const strictRateLimit = rateLimit({
       error: 'Too many sensitive requests',
       code: 'STRICT_RATE_LIMIT_EXCEEDED'
     });
-  }
+  },
+  skip: () => process.env.NODE_ENV !== 'production'
 });
 
 // Request size limiter

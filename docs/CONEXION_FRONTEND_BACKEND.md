@@ -40,7 +40,7 @@ npm run frontend
 
 ## 🌐 URLs de Acceso
 
-- **Frontend**: http://localhost:3000
+- **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:5000
 - **Health Check**: http://localhost:5000/health
 
@@ -52,7 +52,7 @@ npm run frontend
 ```env
 PORT=5000
 NODE_ENV=development
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:5173
 MONGO_URI=mongodb://localhost:27017/agrosens
 SESSION_SECRET=tu-secreto-super-seguro
 CSRF_SECRET=tu-secreto-csrf
@@ -166,7 +166,7 @@ AgroSens/
 ## 🔄 Flujo de Datos
 
 ```
-Frontend (3000) → Proxy → Backend (5000) → MongoDB
+Frontend (5173) → Proxy → Backend (5000) → MongoDB
      ↓              ↓           ↓
    React         Vite       Express
      ↓              ↓           ↓
@@ -235,7 +235,7 @@ npm run build
 
 Si tienes problemas de conexión:
 
-1. **Verificar puertos**: 3000 (frontend) y 5000 (backend)
+1. **Verificar puertos**: 5173 (frontend) y 5000 (backend)
 2. **Revisar .env**: Variables correctas
 3. **Comprobar proxy**: vite.config.js
 4. **Ver logs**: Consola y terminal

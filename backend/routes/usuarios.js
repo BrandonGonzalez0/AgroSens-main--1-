@@ -1,8 +1,12 @@
 import express from "express";
 import Usuario from "../models/Usuario.js";
 import { sanitizeInput } from '../middleware/validation.js';
+import { verifyJWT, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Todas las rutas de usuarios requieren admin
+router.use(verifyJWT, requireRole('admin'));
 
 // Obtener todos los usuarios
 router.get("/", async (req, res) => {

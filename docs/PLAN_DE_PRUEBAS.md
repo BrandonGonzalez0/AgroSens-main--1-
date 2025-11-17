@@ -532,7 +532,7 @@ npm run dev
 
 # Verificar conectividad
 curl http://localhost:5000/health
-curl http://localhost:3000
+curl http://localhost:5173
 
 # Ejecutar pruebas de seguridad
 .\test-security.ps1

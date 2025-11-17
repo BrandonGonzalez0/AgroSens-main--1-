@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import Login from './Login';
+import { auth } from './utils/auth';
 import { float32ToBase64 } from './lib/heatmapUtils';
 import InstallPromptIOS from './InstallPromptIOS';
 import logo from "./logo.png";
@@ -96,6 +98,7 @@ function CultivoCard({ cultivo, onClick, selected }) {
 }
 
 function App() {
+  const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [modo, setModo] = useState(null);
   const [cultivo, setCultivo] = useState("");
@@ -172,8 +175,31 @@ function App() {
   }, [sensorData, autoMode]);
 
   useEffect(() => {
+    // Cargar sesión (offline permitida si fue cacheada)
+    let mounted = true;
+    (async () => {
+      console.log('[App] Iniciando carga de sesión...');
+      try {
+        const s = await auth.getSession();
+        console.log('[App] Sesión obtenida:', s);
+        if (mounted) {
+          setSession(s);
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error('[App] Error loading session:', e);
+        if (mounted) {
+          setSession(null);
+          setLoading(false);
+        }
+      }
+    })();
+
     const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
+    return () => { 
+      mounted = false;
+      clearInterval(id); 
+    };
   }, []);
 
   useEffect(() => {
@@ -208,6 +234,9 @@ function App() {
     };
   }, []);
 
+  // Funciones auxiliares
+  const isGuest = session?.user?.rol === 'invitado';
+
   const onManualInstallClick = async () => {
     if (deferredPrompt && typeof deferredPrompt.prompt === 'function') {
       try {
@@ -234,17 +263,40 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 4000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
   }, [darkMode]);
+
+  // Gate de autenticación
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-r from-green-100 via-green-200 to-green-300 dark:from-gray-800 dark:via-gray-900 dark:to-black transition-colors">
+        <motion.img
+          src={logo}
+          alt="AgroSens Logo"
+          className="w-48 h-48 drop-shadow-lg"
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 1.2, ease: "easeOut" }}
+        />
+        <motion.h1
+          className="mt-6 text-3xl font-bold text-green-900 dark:text-green-200"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1, duration: 1 }}
+        >
+          Bienvenido a AgroSens
+        </motion.h1>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Login onSuccess={(s) => setSession(s)} />;
+  }
 
   const handleValidar = async () => {
     addActivity('validation', `Validando cultivo: ${cultivo}`, '✅');
@@ -341,29 +393,6 @@ function App() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-r from-green-100 via-green-200 to-green-300 dark:from-gray-800 dark:via-gray-900 dark:to-black transition-colors">
-        <motion.img
-          src={logo}
-          alt="AgroSens Logo"
-          className="w-48 h-48 drop-shadow-lg"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 1.2, ease: "easeOut" }}
-        />
-        <motion.h1
-          className="mt-6 text-3xl font-bold text-green-900 dark:text-green-200"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1, duration: 1 }}
-        >
-          Bienvenido a AgroSens
-        </motion.h1>
-      </div>
-    );
-  }
-
   if (!modo) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-all duration-500">
@@ -411,17 +440,41 @@ function App() {
               </div>
 
               <div className="text-center mb-12">
-                <motion.h2
-                  className="text-4xl md:text-5xl font-bold text-gray-800 dark:text-white mb-4"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.8 }}
-                >
-                  Bienvenido a tu
-                  <span className="block bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-                    Centro de Control Agrícola
-                  </span>
-                </motion.h2>
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  <motion.h2
+                    className="text-4xl md:text-5xl font-bold text-gray-800 dark:text-white mb-4"
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ duration: 0.8 }}
+                  >
+                    Bienvenido a tu
+                    <span className="block bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+                      Centro de Control Agrícola
+                    </span>
+                  </motion.h2>
+                  {isGuest && (
+                    <div className="mb-4 text-left w-full sm:w-auto max-w-sm bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-600 rounded-xl p-3 shadow-sm">
+                      <div className="flex items-start gap-2">
+                        <div className="text-xl">⚠️</div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold text-yellow-800 dark:text-yellow-300">Modo Invitado Activo</div>
+                          <ul className="mt-1 space-y-1 text-xs text-yellow-900 dark:text-yellow-200">
+                            <li className="flex items-start gap-1"><span>📌</span><span>Los datos no se guardarán permanentemente</span></li>
+                            <li className="flex items-start gap-1"><span>🔄</span><span>Al cerrar o recargar la app se perderá la información</span></li>
+                            <li className="flex items-start gap-1"><span>💾</span><span>Para guardar tu progreso, inicia sesión</span></li>
+                          </ul>
+                          <button
+                            onClick={async () => { await auth.logout(); setSession(null); }}
+                            className="mt-2 text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+                            title="Iniciar sesión"
+                          >
+                            🔐 Iniciar sesión
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <motion.p
                   className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto"
                   initial={{ y: 20, opacity: 0 }}
@@ -471,6 +524,9 @@ function App() {
               onClick={() => {
                 setShowTelemetry(true);
                 addActivity('feature', 'Dashboard abierto desde inicio', '📊');
+                if (isGuest) {
+                  showNotification('info', 'Modo invitado', 'Algunas funciones están limitadas en modo invitado');
+                }
               }}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
@@ -491,6 +547,9 @@ function App() {
               onClick={() => {
                 setShowCaptureGallery(true);
                 addActivity('feature', 'Galería abierta desde inicio', '📸');
+                if (isGuest) {
+                  showNotification('info', 'Modo invitado', 'Las capturas no se guardarán permanentemente');
+                }
               }}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
@@ -511,6 +570,9 @@ function App() {
               onClick={() => {
                 setShowCropTracker(true);
                 addActivity('feature', 'Seguimiento abierto desde inicio', '📋');
+                if (isGuest) {
+                  showNotification('info', 'Modo invitado', 'El seguimiento no se guardará al cerrar la app');
+                }
               }}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
@@ -547,6 +609,8 @@ function App() {
               </div>
             </motion.button>
           </div>
+
+          {false && isGuest && null}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
             <motion.div
@@ -640,7 +704,7 @@ function App() {
             </motion.div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="lg:col-span-2">
               <WeatherRotator />
             </div>
@@ -1085,12 +1149,14 @@ function App() {
                 <button 
                   onClick={() => { setShowTelemetry(true); setMobileMenuOpen(false); }}
                   className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                  disabled={session?.user?.rol === 'invitado'}
                 >
                   📊 Dashboard
                 </button>
                 <button 
                   onClick={() => { setShowCaptureGallery(true); setMobileMenuOpen(false); }}
                   className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm"
+                  disabled={session?.user?.rol === 'invitado'}
                 >
                   📸 Galería
                 </button>
@@ -1135,6 +1201,9 @@ function App() {
                 onClick={() => {
                   setShowTelemetry(true);
                   addActivity('feature', 'Dashboard de telemetría abierto', '📊');
+                  if (isGuest) {
+                    showNotification('info', 'Modo invitado', 'Funciones limitadas');
+                  }
                 }} 
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
@@ -1144,6 +1213,9 @@ function App() {
                 onClick={() => {
                   setShowCaptureGallery(true);
                   addActivity('feature', 'Galería de capturas abierta', '📸');
+                  if (isGuest) {
+                    showNotification('info', 'Modo invitado', 'Sin guardado permanente');
+                  }
                 }} 
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
@@ -1153,6 +1225,9 @@ function App() {
                 onClick={() => {
                   setShowCropTracker(true);
                   addActivity('feature', 'Seguimiento de cultivos abierto', '📋');
+                  if (isGuest) {
+                    showNotification('info', 'Modo invitado', 'Sin guardado permanente');
+                  }
                 }} 
                 className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >

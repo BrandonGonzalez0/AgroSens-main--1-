@@ -19,9 +19,9 @@ router.use(sensorLimiter);
 router.get('/latest', async (req, res) => {
   // Secure CORS headers
   const allowedOrigins = [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'http://localhost:3000',
-    'https://localhost:3000'
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    'http://localhost:5173',
+    'https://localhost:5173'
   ];
   
   const origin = req.headers.origin;
@@ -69,9 +69,9 @@ router.get('/latest', async (req, res) => {
 router.post('/', sanitizeInput, async (req, res) => {
   // Secure CORS headers
   const allowedOrigins = [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'http://localhost:3000',
-    'https://localhost:3000'
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    'http://localhost:5173',
+    'https://localhost:5173'
   ];
   
   const origin = req.headers.origin;

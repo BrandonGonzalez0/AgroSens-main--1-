@@ -264,7 +264,7 @@ git status | grep .env
 
 **Test:** Verificar CSP en navegador
 
-1. Abre el navegador en `http://localhost:3000`
+1. Abre el navegador en `http://localhost:5173`
 2. Abre DevTools (F12)
 3. Ve a la pestaña "Network"
 4. Recarga la página
