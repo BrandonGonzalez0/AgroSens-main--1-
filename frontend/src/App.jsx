@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Login from './Login';
+import Splash from './Splash';
 import { auth } from './utils/auth';
 import { float32ToBase64 } from './lib/heatmapUtils';
 import InstallPromptIOS from './InstallPromptIOS';
-import logo from "./logo.png";
+// Usar asset público existente
+const LOGO_SRC = "/logo.svg";
 import { motion } from "framer-motion";
 import { validarCultivo, sugerirCultivos, cultivos } from "./ServiciosCultivos";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -99,6 +101,7 @@ function CultivoCard({ cultivo, onClick, selected }) {
 
 function App() {
   const [session, setSession] = useState(null);
+    const [showSplash, setShowSplash] = useState(true);
   const [loading, setLoading] = useState(true);
   const [modo, setModo] = useState(null);
   const [cultivo, setCultivo] = useState("");
@@ -154,6 +157,9 @@ function App() {
   const [backendConnected, setBackendConnected] = useState(false);
   const [recentActivity, setRecentActivity] = useState([]);
 
+  // Debe declararse antes de cualquier return condicional para no romper el orden de hooks
+  const handleSplashDone = useCallback(() => setShowSplash(false), []);
+
   const addActivity = (type, description, icon = '🌱') => {
     const activity = {
       id: Date.now(),
@@ -175,23 +181,18 @@ function App() {
   }, [sensorData, autoMode]);
 
   useEffect(() => {
-    // Cargar sesión (offline permitida si fue cacheada)
+    // Cargar sesión existente (si la hay) mientras se muestra el Splash
     let mounted = true;
     (async () => {
-      console.log('[App] Iniciando carga de sesión...');
+      console.log('[App] Cargando sesión...');
       try {
         const s = await auth.getSession();
-        console.log('[App] Sesión obtenida:', s);
-        if (mounted) {
-          setSession(s);
-          setLoading(false);
-        }
+        if (mounted) setSession(s || null);
       } catch (e) {
-        console.error('[App] Error loading session:', e);
-        if (mounted) {
-          setSession(null);
-          setLoading(false);
-        }
+        console.warn('[App] getSession falló:', e?.message || e);
+        if (mounted) setSession(null);
+      } finally {
+        if (mounted) setLoading(false);
       }
     })();
 
@@ -237,6 +238,38 @@ function App() {
   // Funciones auxiliares
   const isGuest = session?.user?.rol === 'invitado';
 
+  // Gestión de pruebas (trial) por función en modo invitado
+  const GUEST_TRIALS_KEY = 'agrosens_guest_trials';
+  const getTrials = () => {
+    try {
+      const raw = sessionStorage.getItem(GUEST_TRIALS_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed || { ia: 1, dashboard: 1, gallery: 1, tracker: 1, gps: 1 };
+    } catch { return { ia: 1, dashboard: 1, gallery: 1, tracker: 1, gps: 1 }; }
+  };
+  const setTrials = (obj) => {
+    try { sessionStorage.setItem(GUEST_TRIALS_KEY, JSON.stringify(obj)); } catch {}
+  };
+  const trialRemaining = (key) => {
+    const t = getTrials();
+    return Math.max(0, Number(t[key] ?? 0));
+  };
+  const consumeTrial = (key) => {
+    const t = getTrials();
+    if ((t[key] ?? 0) > 0) { t[key] = 0; setTrials(t); }
+  };
+  const guestGuard = async (key, action, opts = {}) => {
+    if (!isGuest) { action(); return; }
+    const remain = trialRemaining(key);
+    if (remain > 0) {
+      showNotification('info', 'Prueba de invitado', opts.msg || 'Tienes 1 uso de prueba para esta función');
+      consumeTrial(key);
+      action();
+    } else {
+      showNotification('warning', 'Función bloqueada', 'Inicia sesión para usar esta función');
+    }
+  };
+
   const onManualInstallClick = async () => {
     if (deferredPrompt && typeof deferredPrompt.prompt === 'function') {
       try {
@@ -270,26 +303,16 @@ function App() {
     }
   }, [darkMode]);
 
+  // Splash siempre al recargar
+  if (showSplash) {
+    return <Splash onDone={handleSplashDone} />;
+  }
+
   // Gate de autenticación
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-r from-green-100 via-green-200 to-green-300 dark:from-gray-800 dark:via-gray-900 dark:to-black transition-colors">
-        <motion.img
-          src={logo}
-          alt="AgroSens Logo"
-          className="w-48 h-48 drop-shadow-lg"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 1.2, ease: "easeOut" }}
-        />
-        <motion.h1
-          className="mt-6 text-3xl font-bold text-green-900 dark:text-green-200"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1, duration: 1 }}
-        >
-          Bienvenido a AgroSens
-        </motion.h1>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="text-gray-600 dark:text-gray-300">Cargando…</div>
       </div>
     );
   }
@@ -403,7 +426,7 @@ function App() {
               <div className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-4">
                   <motion.img
-                    src={logo}
+                    src={LOGO_SRC}
                     alt="AgroSens"
                     className="w-12 h-12 rounded-xl shadow-lg"
                     initial={{ rotate: -10, opacity: 0 }}
@@ -435,6 +458,13 @@ function App() {
                     className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition-colors"
                   >
                     📱 Instalar App
+                  </button>
+                  <button
+                    onClick={async () => { try { await auth.logout(); } finally { setSession(null); } }}
+                    className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg font-medium transition-colors"
+                    title="Cerrar sesión"
+                  >
+                    🔒 Cerrar sesión
                   </button>
                 </div>
               </div>
@@ -501,13 +531,13 @@ function App() {
         <div className="max-w-7xl mx-auto px-6 pb-12">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12">
             <motion.button
-              onClick={() => {
+              onClick={() => guestGuard('ia', () => {
                 setShowCameraAnalysis(true);
                 addActivity('feature', 'Análisis IA abierto desde inicio', '🔍');
-              }}
+              })}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+              className={`group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 ${isGuest && trialRemaining('ia')===0 ? 'opacity-60' : ''}`}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="relative">
@@ -516,21 +546,30 @@ function App() {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Análisis IA</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300">Detecta madurez y plagas con tu cámara</p>
-                <div className="mt-4 text-xs text-purple-600 dark:text-purple-400 font-medium">Usar ahora →</div>
+                {isGuest && (
+                  <div className="mt-2 text-xs font-medium">
+                    {trialRemaining('ia')>0 ? (
+                      <span className="text-amber-600 dark:text-amber-400">🔓 1 prueba disponible</span>
+                    ) : (
+                      <span className="text-gray-500 dark:text-gray-400">🔒 Bloqueado</span>
+                    )}
+                  </div>
+                )}
+                {!isGuest && <div className="mt-4 text-xs text-purple-600 dark:text-purple-400 font-medium">Usar ahora →</div>}
+                {isGuest && trialRemaining('ia')===0 && (
+                  <div className="absolute top-3 right-3 text-gray-500">🔒</div>
+                )}
               </div>
             </motion.button>
 
             <motion.button
-              onClick={() => {
+              onClick={() => guestGuard('dashboard', () => {
                 setShowTelemetry(true);
                 addActivity('feature', 'Dashboard abierto desde inicio', '📊');
-                if (isGuest) {
-                  showNotification('info', 'Modo invitado', 'Algunas funciones están limitadas en modo invitado');
-                }
-              }}
+              })}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+              className={`group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 ${isGuest && trialRemaining('dashboard')===0 ? 'opacity-60' : ''}`}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="relative">
@@ -539,21 +578,31 @@ function App() {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Dashboard</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300">Estadísticas y métricas de tus cultivos</p>
-                <div className="mt-4 text-xs text-blue-600 dark:text-blue-400 font-medium">Ver datos →</div>
+                {isGuest ? (
+                  <div className="mt-2 text-xs font-medium">
+                    {trialRemaining('dashboard')>0 ? (
+                      <span className="text-amber-600 dark:text-amber-400">🔓 1 prueba disponible</span>
+                    ) : (
+                      <span className="text-gray-500 dark:text-gray-400">🔒 Bloqueado</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-4 text-xs text-blue-600 dark:text-blue-400 font-medium">Ver datos →</div>
+                )}
+                {isGuest && trialRemaining('dashboard')===0 && (
+                  <div className="absolute top-3 right-3 text-gray-500">🔒</div>
+                )}
               </div>
             </motion.button>
 
             <motion.button
-              onClick={() => {
+              onClick={() => guestGuard('gallery', () => {
                 setShowCaptureGallery(true);
                 addActivity('feature', 'Galería abierta desde inicio', '📸');
-                if (isGuest) {
-                  showNotification('info', 'Modo invitado', 'Las capturas no se guardarán permanentemente');
-                }
-              }}
+              }, { msg: 'Las capturas no se guardarán permanentemente' })}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+              className={`group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 ${isGuest && trialRemaining('gallery')===0 ? 'opacity-60' : ''}`}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-emerald-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="relative">
@@ -562,21 +611,31 @@ function App() {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Galería</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300">Historial de capturas y análisis</p>
-                <div className="mt-4 text-xs text-green-600 dark:text-green-400 font-medium">Explorar →</div>
+                {isGuest ? (
+                  <div className="mt-2 text-xs font-medium">
+                    {trialRemaining('gallery')>0 ? (
+                      <span className="text-amber-600 dark:text-amber-400">🔓 1 prueba disponible</span>
+                    ) : (
+                      <span className="text-gray-500 dark:text-gray-400">🔒 Bloqueado</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-4 text-xs text-green-600 dark:text-green-400 font-medium">Explorar →</div>
+                )}
+                {isGuest && trialRemaining('gallery')===0 && (
+                  <div className="absolute top-3 right-3 text-gray-500">🔒</div>
+                )}
               </div>
             </motion.button>
 
             <motion.button
-              onClick={() => {
+              onClick={() => guestGuard('tracker', () => {
                 setShowCropTracker(true);
                 addActivity('feature', 'Seguimiento abierto desde inicio', '📋');
-                if (isGuest) {
-                  showNotification('info', 'Modo invitado', 'El seguimiento no se guardará al cerrar la app');
-                }
-              }}
+              }, { msg: 'El seguimiento no se guardará permanentemente' })}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+              className={`group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 ${isGuest && trialRemaining('tracker')===0 ? 'opacity-60' : ''}`}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-red-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="relative">
@@ -585,18 +644,31 @@ function App() {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Seguimiento</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300">Seguimiento paso a paso de cultivos</p>
-                <div className="mt-4 text-xs text-orange-600 dark:text-orange-400 font-medium">Gestionar →</div>
+                {isGuest ? (
+                  <div className="mt-2 text-xs font-medium">
+                    {trialRemaining('tracker')>0 ? (
+                      <span className="text-amber-600 dark:text-amber-400">🔓 1 prueba disponible</span>
+                    ) : (
+                      <span className="text-gray-500 dark:text-gray-400">🔒 Bloqueado</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-4 text-xs text-orange-600 dark:text-orange-400 font-medium">Gestionar →</div>
+                )}
+                {isGuest && trialRemaining('tracker')===0 && (
+                  <div className="absolute top-3 right-3 text-gray-500">🔒</div>
+                )}
               </div>
             </motion.button>
 
             <motion.button
-              onClick={() => {
+              onClick={() => guestGuard('gps', () => {
                 setShowGeoTerrainSimulator(true);
                 addActivity('feature', 'Terreno GPS abierto desde inicio', '🌍');
-              }}
+              })}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+              className={`group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 ${isGuest && trialRemaining('gps')===0 ? 'opacity-60' : ''}`}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-cyan-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="relative">
@@ -605,7 +677,20 @@ function App() {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Terreno GPS</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300">Mapeo satelital con coordenadas reales</p>
-                <div className="mt-4 text-xs text-teal-600 dark:text-teal-400 font-medium">Mapear →</div>
+                {isGuest ? (
+                  <div className="mt-2 text-xs font-medium">
+                    {trialRemaining('gps')>0 ? (
+                      <span className="text-amber-600 dark:text-amber-400">🔓 1 prueba disponible</span>
+                    ) : (
+                      <span className="text-gray-500 dark:text-gray-400">🔒 Bloqueado</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-4 text-xs text-teal-600 dark:text-teal-400 font-medium">Mapear →</div>
+                )}
+                {isGuest && trialRemaining('gps')===0 && (
+                  <div className="absolute top-3 right-3 text-gray-500">🔒</div>
+                )}
               </div>
             </motion.button>
           </div>
@@ -1141,27 +1226,25 @@ function App() {
             <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
               <div className="grid grid-cols-2 gap-3">
                 <button 
-                  onClick={() => { setShowCameraAnalysis(true); setMobileMenuOpen(false); }}
+                  onClick={() => guestGuard('ia', () => { setShowCameraAnalysis(true); setMobileMenuOpen(false); })}
                   className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg text-sm"
                 >
                   🔍 IA
                 </button>
                 <button 
-                  onClick={() => { setShowTelemetry(true); setMobileMenuOpen(false); }}
+                  onClick={() => guestGuard('dashboard', () => { setShowTelemetry(true); setMobileMenuOpen(false); })}
                   className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
-                  disabled={session?.user?.rol === 'invitado'}
                 >
                   📊 Dashboard
                 </button>
                 <button 
-                  onClick={() => { setShowCaptureGallery(true); setMobileMenuOpen(false); }}
+                  onClick={() => guestGuard('gallery', () => { setShowCaptureGallery(true); setMobileMenuOpen(false); })}
                   className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm"
-                  disabled={session?.user?.rol === 'invitado'}
                 >
                   📸 Galería
                 </button>
                 <button 
-                  onClick={() => { setShowGeoTerrainSimulator(true); setMobileMenuOpen(false); }}
+                  onClick={() => guestGuard('gps', () => { setShowGeoTerrainSimulator(true); setMobileMenuOpen(false); })}
                   className="flex items-center gap-2 px-3 py-2 bg-teal-600 text-white rounded-lg text-sm"
                 >
                   🌍 GPS
@@ -1189,55 +1272,31 @@ function App() {
             </div>
             <div className="flex flex-wrap justify-center gap-3">
               <button 
-                onClick={() => {
-                  setShowCameraAnalysis(true);
-                  addActivity('feature', 'Análisis IA abierto', '🔍');
-                }} 
+                onClick={() => guestGuard('ia', () => { setShowCameraAnalysis(true); addActivity('feature', 'Análisis IA abierto', '🔍'); })} 
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
                 🔍 Análisis IA
               </button>
               <button 
-                onClick={() => {
-                  setShowTelemetry(true);
-                  addActivity('feature', 'Dashboard de telemetría abierto', '📊');
-                  if (isGuest) {
-                    showNotification('info', 'Modo invitado', 'Funciones limitadas');
-                  }
-                }} 
+                onClick={() => guestGuard('dashboard', () => { setShowTelemetry(true); addActivity('feature', 'Dashboard de telemetría abierto', '📊'); })} 
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
                 📊 Dashboard
               </button>
               <button 
-                onClick={() => {
-                  setShowCaptureGallery(true);
-                  addActivity('feature', 'Galería de capturas abierta', '📸');
-                  if (isGuest) {
-                    showNotification('info', 'Modo invitado', 'Sin guardado permanente');
-                  }
-                }} 
+                onClick={() => guestGuard('gallery', () => { setShowCaptureGallery(true); addActivity('feature', 'Galería de capturas abierta', '📸'); })} 
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
                 📸 Galería
               </button>
               <button 
-                onClick={() => {
-                  setShowCropTracker(true);
-                  addActivity('feature', 'Seguimiento de cultivos abierto', '📋');
-                  if (isGuest) {
-                    showNotification('info', 'Modo invitado', 'Sin guardado permanente');
-                  }
-                }} 
+                onClick={() => guestGuard('tracker', () => { setShowCropTracker(true); addActivity('feature', 'Seguimiento de cultivos abierto', '📋'); })} 
                 className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
                 📋 Seguimiento
               </button>
               <button 
-                onClick={() => {
-                  setShowGeoTerrainSimulator(true);
-                  addActivity('feature', 'Simulador de terreno GPS abierto', '🌍');
-                }} 
+                onClick={() => guestGuard('gps', () => { setShowGeoTerrainSimulator(true); addActivity('feature', 'Simulador de terreno GPS abierto', '🌍'); })} 
                 className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:scale-105"
               >
                 🌍 Terreno GPS

@@ -13,7 +13,7 @@ const users = [
   {
     nombre: 'Administrador AgroSens',
     email: 'admin@agrosens.cl',
-    password_hash: '$2a$10$ZSEjP8YpQjIfaMqkD1KQ9Oj6gRuP7apGACR6Ujx9E4RyqMG4Pbe8m',
+    password_hash: '$2a$10$OKGapI33uKIfegzb9cv7fO2JQoExEZrQaIO/wV/Ths1x2tJtuSKaS',
     rol: 'admin',
     createdAt: new Date(),
     updatedAt: new Date()
@@ -21,7 +21,7 @@ const users = [
   {
     nombre: 'Agricultor Demo',
     email: 'agricultor@agrosens.cl',
-    password_hash: '$2a$10$rJMVxJUE8eD9JhE7KwJGOuBIqbl9Yqk3j0d8JwRr0ZSwa6CBGqD12',
+    password_hash: '$2a$10$aA32zTOp1coN4WXVYtMaQeGSBRSbBLgJGHZly/BoE2Xgp4IOWWKku',
     rol: 'agricultor',
     createdAt: new Date(),
     updatedAt: new Date()
