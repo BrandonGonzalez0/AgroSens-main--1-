@@ -17,7 +17,7 @@ import CropSelectionDashboard from './CropSelectionDashboard';
 import CropValidationResult from './CropValidationResult';
 import CropTracker from './CropTracker';
 import GeoTerrainSimulator from './GeoTerrainSimulator';
-import SensorDashboard from './components/SensorDashboard';
+// SensorDashboard removed — updates now se realizan desde formularios
 
 import NotificationSystem, { showNotification } from './NotificationSystem';
 import cultivosDB from "./data/cultivos.json";
@@ -33,6 +33,9 @@ const isMobile = () => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
          (navigator.maxTouchPoints && navigator.maxTouchPoints > 2 && /MacIntel/.test(navigator.platform));
 };
+
+// Backend base URL (usa .env VITE_API_URL en desarrollo)
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 // Normaliza un nombre para buscar en cultivosDB (quita acentos, espacios y minúsculas)
 function normalizeKey(name) {
@@ -149,7 +152,7 @@ function App() {
   const [showValidationResult, setShowValidationResult] = useState(false);
   const [showCropTracker, setShowCropTracker] = useState(false);
   const [showGeoTerrainSimulator, setShowGeoTerrainSimulator] = useState(false);
-  const [showSensorDashboard, setShowSensorDashboard] = useState(false);
+  // Sensor dashboard modal removed; no state required
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [now, setNow] = useState(new Date());
@@ -351,24 +354,60 @@ function App() {
   };
 
   // Fetch latest reading for selected device and fill a specific field
+  // Primero intenta leer desde el servicio MQTT (/sensores/todo?device=...), si no hay dato usa el endpoint histórico existente
   const fetchLatestAndFill = async (field) => {
-    if (!selectedDevice) {
-      showNotification('warning', 'Selecciona un sensor', 'Elige un dispositivo desde el selector para usar auto-rellenado');
-      return;
-    }
-    try {
-      const res = await fetch(`/api/sensors/v1/devices/${encodeURIComponent(selectedDevice)}/latest`);
-      if (!res.ok) {
-        showNotification('error', 'Sin lecturas', 'No se encontró lectura para este dispositivo');
-        return;
+      try {
+        // Construir query para MQTT: si hay selectedDevice, preguntar por dispositivo, si no, pedir último global
+        const deviceQuery = selectedDevice ? `?device=${encodeURIComponent(selectedDevice)}` : '';
+        // Intentar desde MQTT state (global o por dispositivo) usando API_BASE para evitar problemas de proxy en dev
+        const mqttRes = await fetch(`${API_BASE}/sensores/todo${deviceQuery}`);
+      if (mqttRes.ok) {
+        const mqttData = await mqttRes.json();
+        // humedad viene en mqttData.humedad.value
+        if (field === 'humedad') {
+            const v = mqttData?.humedad?.value ?? null;
+            if (v !== null && v !== undefined) {
+              // Normalizar: humedad suelo suele ser porcentaje entero
+              const rounded = Math.round(Number(v));
+              setHumedad(String(rounded));
+              setAutoPress(a => ({ ...a, humedad: true }));
+              setTimeout(() => setAutoPress(a => ({ ...a, humedad: false })), 900);
+              addActivity('sensor-manual', `Humedad rellenada desde ${selectedDevice || 'MQTT global'}`, '💧');
+              return;
+            }
+        }
+        if (field === 'temp') {
+            const v = mqttData?.temperatura?.value ?? null;
+            if (v !== null && v !== undefined) {
+              const tnum = Number(v);
+              setTemperatura(String(Number.isFinite(tnum) ? Number(tnum.toFixed(1)) : v));
+              setAutoPress(a => ({ ...a, temp: true }));
+              setTimeout(() => setAutoPress(a => ({ ...a, temp: false })), 900);
+              addActivity('sensor-manual', `Temperatura rellenada desde ${selectedDevice || 'MQTT global'}`, '🌡️');
+              return;
+            }
+        }
+        // PH no suele venir por MQTT en la integración actual -> fallback al endpoint histórico
       }
-      const data = await res.json();
+
+        // Fallback: endpoint histórico en caso de que MQTT no aporte el valor
+        // Si hay selectedDevice usamos el endpoint por dispositivo, si no, no hay historial y mostramos aviso
+        if (!selectedDevice) {
+          showNotification('warning', 'Sin sensor seleccionado', 'No hay datos históricos sin seleccionar un sensor y no se recibió valor MQTT');
+          return;
+        }
+        const res = await fetch(`${API_BASE}/api/sensors/v1/devices/${encodeURIComponent(selectedDevice)}/latest`);
+        if (!res.ok) {
+          showNotification('error', 'Sin lecturas', 'No se encontró lectura para este dispositivo');
+          return;
+        }
+        const data = await res.json();
       if (field === 'humedad') {
         if (data.humedad_suelo === null || data.humedad_suelo === undefined) {
           showNotification('warning', 'Sin valor', 'No hay valor de humedad disponible en la última lectura');
           return;
         }
-        setHumedad(String(data.humedad_suelo));
+          setHumedad(String(Math.round(Number(data.humedad_suelo))));
         setAutoPress(a => ({ ...a, humedad: true }));
         setTimeout(() => setAutoPress(a => ({ ...a, humedad: false })), 900);
         addActivity('sensor-manual', `Humedad rellenada desde ${selectedDevice}`, '💧');
@@ -396,7 +435,7 @@ function App() {
       }
     } catch (e) {
       console.error('fetchLatestAndFill error', e);
-      showNotification('error', 'Error', 'No se pudo obtener la última lectura');
+      showNotification('error', 'Error', e?.message || 'No se pudo obtener la última lectura');
     }
   };
 
@@ -825,25 +864,7 @@ function App() {
               </div>
             </motion.button>
 
-            <motion.button
-              onClick={() => {
-                setShowSensorDashboard(true);
-                addActivity('feature', 'Dashboard de sensores abierto', '📡');
-              }}
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative">
-                <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <span className="text-2xl">📡</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Sensores</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-300">Monitoreo de sensores Arduino</p>
-                <div className="mt-4 text-xs text-indigo-600 dark:text-indigo-400 font-medium">Monitorear →</div>
-              </div>
-            </motion.button>
+            {/* SensorDashboard eliminado: se usa actualización desde los formularios */}
 
             <motion.button
               onClick={() => guestGuard('gps', () => {
@@ -1015,24 +1036,7 @@ function App() {
         <CaptureGallery isOpen={showCaptureGallery} onClose={() => setShowCaptureGallery(false)} />
         <CropTracker isOpen={showCropTracker} onClose={() => setShowCropTracker(false)} />
         <GeoTerrainSimulator isOpen={showGeoTerrainSimulator} onClose={() => setShowGeoTerrainSimulator(false)} />
-        {showSensorDashboard && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-bold text-gray-800 dark:text-white">Dashboard de Sensores</h2>
-                <button
-                  onClick={() => setShowSensorDashboard(false)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
-                <SensorDashboard />
-              </div>
-            </div>
-          </div>
-        )}
+        {/* SensorDashboard modal removed per user request */}
       </div>
     );
   }
@@ -1193,7 +1197,6 @@ function App() {
                       <button
                         type="button"
                         onClick={() => fetchLatestAndFill('ph')}
-                        disabled={!selectedDevice}
                         title="Autorrellenar pH desde sensor"
                         className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.ph ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
                       >
@@ -1228,7 +1231,6 @@ function App() {
                       <button
                         type="button"
                         onClick={() => fetchLatestAndFill('humedad')}
-                        disabled={!selectedDevice}
                         title="Autorrellenar humedad desde sensor"
                         className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.humedad ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
                       >
@@ -1263,7 +1265,6 @@ function App() {
                       <button
                         type="button"
                         onClick={() => fetchLatestAndFill('temp')}
-                        disabled={!selectedDevice}
                         title="Autorrellenar temp. desde sensor"
                         className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.temp ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
                       >
@@ -1411,7 +1412,6 @@ function App() {
                     <button
                       type="button"
                       onClick={() => fetchLatestAndFill('ph')}
-                      disabled={!selectedDevice}
                       title="Autorrellenar pH desde sensor"
                       className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.ph ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
                     >
@@ -1446,7 +1446,6 @@ function App() {
                     <button
                       type="button"
                       onClick={() => fetchLatestAndFill('humedad')}
-                      disabled={!selectedDevice}
                       title="Autorrellenar humedad desde sensor"
                       className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.humedad ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
                     >
@@ -1481,7 +1480,6 @@ function App() {
                     <button
                       type="button"
                       onClick={() => fetchLatestAndFill('temp')}
-                      disabled={!selectedDevice}
                       title="Autorrellenar temp. desde sensor"
                       className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.temp ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
                     >

@@ -22,6 +22,7 @@ import {
 
 import sensoresRoutes from "./routes/sensores.js";
 import sensorsV1 from "./routes/api_sensors_v1.js";
+import mqttSensorsRoutes from './routes/mqtt_sensors.js';
 import iaRoutes from "./routes/ia.js";
 import modelsRoutes from "./routes/models.js";
 import cultivosRoutes from "./routes/cultivos.js";
@@ -196,6 +197,8 @@ const start = async () => {
   app.use('/api/sensores', sensoresRoutes);
   // New v1 sensors API (recepción de lecturas desde ESP32 u otros gateways)
   app.use('/api/sensors/v1', sensorsV1);
+  // Endpoints que exponen los últimos valores leídos vía MQTT
+  app.use('/sensores', mqttSensorsRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/ia', validateCSRFToken, iaRoutes);
   app.use('/api/models', modelsRoutes);
@@ -247,7 +250,15 @@ const start = async () => {
   });
 
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT} (DB ${dbConnection ? 'conectada' : 'no disponible - modo local'})`));
+  const server = app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT} (DB ${dbConnection ? 'conectada' : 'no disponible - modo local'})`));
+
+  // Iniciar servicio MQTT en background
+  try {
+    const { startMQTTService } = await import('./mqtt_service.js');
+    startMQTTService();
+  } catch (e) {
+    console.error('No se pudo inicializar servicio MQTT:', e.message || e);
+  }
 };
 
 start();
