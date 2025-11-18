@@ -21,6 +21,7 @@ import {
 } from './middleware/security.js';
 
 import sensoresRoutes from "./routes/sensores.js";
+import sensorsV1 from "./routes/api_sensors_v1.js";
 import iaRoutes from "./routes/ia.js";
 import modelsRoutes from "./routes/models.js";
 import cultivosRoutes from "./routes/cultivos.js";
@@ -193,6 +194,8 @@ const start = async () => {
 
   // Rutas principales con protección CSRF para operaciones de escritura
   app.use('/api/sensores', sensoresRoutes);
+  // New v1 sensors API (recepción de lecturas desde ESP32 u otros gateways)
+  app.use('/api/sensors/v1', sensorsV1);
   app.use('/api/auth', authRoutes);
   app.use('/api/ia', validateCSRFToken, iaRoutes);
   app.use('/api/models', modelsRoutes);

@@ -17,6 +17,7 @@ import CropSelectionDashboard from './CropSelectionDashboard';
 import CropValidationResult from './CropValidationResult';
 import CropTracker from './CropTracker';
 import GeoTerrainSimulator from './GeoTerrainSimulator';
+import SensorDashboard from './components/SensorDashboard';
 
 import NotificationSystem, { showNotification } from './NotificationSystem';
 import cultivosDB from "./data/cultivos.json";
@@ -148,6 +149,7 @@ function App() {
   const [showValidationResult, setShowValidationResult] = useState(false);
   const [showCropTracker, setShowCropTracker] = useState(false);
   const [showGeoTerrainSimulator, setShowGeoTerrainSimulator] = useState(false);
+  const [showSensorDashboard, setShowSensorDashboard] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [now, setNow] = useState(new Date());
@@ -156,6 +158,9 @@ function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [backendConnected, setBackendConnected] = useState(false);
   const [recentActivity, setRecentActivity] = useState([]);
+  const [devices, setDevices] = useState([]);
+  const [selectedDevice, setSelectedDevice] = useState('');
+  const [autoPress, setAutoPress] = useState({ ph: false, humedad: false, temp: false });
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
 
   // Debe declararse antes de cualquier return condicional para no romper el orden de hooks
@@ -197,6 +202,17 @@ function App() {
       }
     })();
 
+    // cargar lista de dispositivos conocidos (sensores)
+    (async function loadDevices() {
+      try {
+        const res = await fetch('/api/sensors/v1/devices');
+        if (res.ok) {
+          const j = await res.json();
+          if (mounted) setDevices(j.devices || []);
+        }
+      } catch (e) { /* ignore */ }
+    })();
+
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => { 
       mounted = false;
@@ -218,6 +234,55 @@ function App() {
 
     return unsubscribe;
   }, []);
+
+  // Poll latest reading for selected device and auto-fill fields when values appear
+  useEffect(() => {
+    if (!selectedDevice) return undefined;
+    let mounted = true;
+    let polling = true;
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/sensors/v1/devices/${encodeURIComponent(selectedDevice)}/latest`);
+        if (!mounted || !polling) return;
+        if (res.ok) {
+          const data = await res.json();
+          // Auto-fill humedad
+          if (data.humedad_suelo !== null && (humedad === '' || humedad === null)) {
+            setHumedad(String(data.humedad_suelo));
+            setAutoPress(a => ({ ...a, humedad: true }));
+            setTimeout(() => setAutoPress(a => ({ ...a, humedad: false })), 900);
+            addActivity('sensor-auto', `Humedad autocompletada desde ${selectedDevice}`, '💧');
+          }
+          // Auto-fill temperatura
+          if (data.temperature !== undefined && data.temperature !== null && (temperatura === '' || temperatura === null)) {
+            // note: backend uses 'temperature' or 'temperatura_aire' depending on route; support both
+            const t = data.temperature ?? data.temperatura_aire ?? null;
+            if (t !== null) {
+              setTemperatura(String(t));
+              setAutoPress(a => ({ ...a, temp: true }));
+              setTimeout(() => setAutoPress(a => ({ ...a, temp: false })), 900);
+              addActivity('sensor-auto', `Temperatura autocompletada desde ${selectedDevice}`, '🌡️');
+            }
+          }
+          // Auto-fill ph
+          if (data.ph_suelo !== null && (ph === '' || ph === null)) {
+            setPh(String(data.ph_suelo));
+            setAutoPress(a => ({ ...a, ph: true }));
+            setTimeout(() => setAutoPress(a => ({ ...a, ph: false })), 900);
+            addActivity('sensor-auto', `pH autocompletado desde ${selectedDevice}`, '🧪');
+          }
+        }
+      } catch (e) {
+        // ignore polling errors silently
+      } finally {
+        if (mounted && polling) setTimeout(poll, 3000);
+      }
+    }
+
+    poll();
+    return () => { mounted = false; polling = false; };
+  }, [selectedDevice, humedad, temperatura, ph]);
 
   useEffect(() => {
     const onBefore = (e) => {
@@ -282,6 +347,56 @@ function App() {
       localStorage.setItem('agrosens_install_dismissed', '1');
     } else {
       setShowInstallManual(true);
+    }
+  };
+
+  // Fetch latest reading for selected device and fill a specific field
+  const fetchLatestAndFill = async (field) => {
+    if (!selectedDevice) {
+      showNotification('warning', 'Selecciona un sensor', 'Elige un dispositivo desde el selector para usar auto-rellenado');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/sensors/v1/devices/${encodeURIComponent(selectedDevice)}/latest`);
+      if (!res.ok) {
+        showNotification('error', 'Sin lecturas', 'No se encontró lectura para este dispositivo');
+        return;
+      }
+      const data = await res.json();
+      if (field === 'humedad') {
+        if (data.humedad_suelo === null || data.humedad_suelo === undefined) {
+          showNotification('warning', 'Sin valor', 'No hay valor de humedad disponible en la última lectura');
+          return;
+        }
+        setHumedad(String(data.humedad_suelo));
+        setAutoPress(a => ({ ...a, humedad: true }));
+        setTimeout(() => setAutoPress(a => ({ ...a, humedad: false })), 900);
+        addActivity('sensor-manual', `Humedad rellenada desde ${selectedDevice}`, '💧');
+      }
+      if (field === 'temp') {
+        const t = data.temperature ?? data.temperatura_aire ?? null;
+        if (t === null || t === undefined) {
+          showNotification('warning', 'Sin valor', 'No hay valor de temperatura disponible en la última lectura');
+          return;
+        }
+        setTemperatura(String(t));
+        setAutoPress(a => ({ ...a, temp: true }));
+        setTimeout(() => setAutoPress(a => ({ ...a, temp: false })), 900);
+        addActivity('sensor-manual', `Temperatura rellenada desde ${selectedDevice}`, '🌡️');
+      }
+      if (field === 'ph') {
+        if (data.ph_suelo === null || data.ph_suelo === undefined) {
+          showNotification('warning', 'Sin valor', 'No hay valor de pH disponible en la última lectura');
+          return;
+        }
+        setPh(String(data.ph_suelo));
+        setAutoPress(a => ({ ...a, ph: true }));
+        setTimeout(() => setAutoPress(a => ({ ...a, ph: false })), 900);
+        addActivity('sensor-manual', `pH rellenado desde ${selectedDevice}`, '🧪');
+      }
+    } catch (e) {
+      console.error('fetchLatestAndFill error', e);
+      showNotification('error', 'Error', 'No se pudo obtener la última lectura');
     }
   };
 
@@ -711,6 +826,26 @@ function App() {
             </motion.button>
 
             <motion.button
+              onClick={() => {
+                setShowSensorDashboard(true);
+                addActivity('feature', 'Dashboard de sensores abierto', '📡');
+              }}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative">
+                <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl">📡</span>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">Sensores</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Monitoreo de sensores Arduino</p>
+                <div className="mt-4 text-xs text-indigo-600 dark:text-indigo-400 font-medium">Monitorear →</div>
+              </div>
+            </motion.button>
+
+            <motion.button
               onClick={() => guestGuard('gps', () => {
                 setShowGeoTerrainSimulator(true);
                 addActivity('feature', 'Terreno GPS abierto desde inicio', '🌍');
@@ -880,6 +1015,24 @@ function App() {
         <CaptureGallery isOpen={showCaptureGallery} onClose={() => setShowCaptureGallery(false)} />
         <CropTracker isOpen={showCropTracker} onClose={() => setShowCropTracker(false)} />
         <GeoTerrainSimulator isOpen={showGeoTerrainSimulator} onClose={() => setShowGeoTerrainSimulator(false)} />
+        {showSensorDashboard && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-xl font-bold text-gray-800 dark:text-white">Dashboard de Sensores</h2>
+                <button
+                  onClick={() => setShowSensorDashboard(false)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+                <SensorDashboard />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -959,6 +1112,14 @@ function App() {
                       <span className="hidden sm:inline">{sensorData.isConnected ? 'Arduino conectado' : 'Arduino desconectado'}</span>
                       <span className="sm:hidden">{sensorData.isConnected ? 'Conectado' : 'Desconectado'}</span>
                     </div>
+                    {/* Device selector inside the validation form */}
+                    <div className="mt-3 w-full md:w-auto">
+                      <label className="text-xs text-gray-500 mb-1 block">Sensor (opcional)</label>
+                      <select value={selectedDevice} onChange={(e) => setSelectedDevice(e.target.value)} className="rounded-lg px-2 py-1 text-sm w-full md:w-64 bg-white dark:bg-gray-700 border">
+                        <option value="">-- Ninguno --</option>
+                        {devices.map(d => <option key={d.deviceId} value={d.deviceId}>{d.deviceId}</option>)}
+                      </select>
+                    </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={toggleAutoMode}
@@ -1015,19 +1176,30 @@ function App() {
                         </span>
                       )}
                     </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={ph}
-                      onChange={(e) => setPh(e.target.value)}
-                      className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
-                        autoMode && sensorData.ph
-                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
-                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-green-500'
-                      }`}
-                      placeholder="Ej: 6.5"
-                      readOnly={autoMode}
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={ph}
+                        onChange={(e) => setPh(e.target.value)}
+                        className={`flex-1 border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                          autoMode && sensorData.ph
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                            : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-green-500'
+                        }`}
+                        placeholder="Ej: 6.5"
+                        readOnly={autoMode}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fetchLatestAndFill('ph')}
+                        disabled={!selectedDevice}
+                        title="Autorrellenar pH desde sensor"
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.ph ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
+                      >
+                        ⤓
+                      </button>
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rango típico: 5.5 - 8.0</p>
                   </div>
 
@@ -1040,18 +1212,29 @@ function App() {
                         </span>
                       )}
                     </label>
-                    <input
-                      type="number"
-                      value={humedad}
-                      onChange={(e) => setHumedad(e.target.value)}
-                      className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
-                        autoMode && sensorData.humidity
-                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
-                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
-                      }`}
-                      placeholder="Ej: 70"
-                      readOnly={autoMode}
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={humedad}
+                        onChange={(e) => setHumedad(e.target.value)}
+                        className={`flex-1 border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                          autoMode && sensorData.humidity
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                            : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
+                        }`}
+                        placeholder="Ej: 70"
+                        readOnly={autoMode}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fetchLatestAndFill('humedad')}
+                        disabled={!selectedDevice}
+                        title="Autorrellenar humedad desde sensor"
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.humedad ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
+                      >
+                        ⤓
+                      </button>
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rango típico: 40 - 90%</p>
                   </div>
 
@@ -1064,18 +1247,29 @@ function App() {
                         </span>
                       )}
                     </label>
-                    <input
-                      type="number"
-                      value={temperatura}
-                      onChange={(e) => setTemperatura(e.target.value)}
-                      className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
-                        autoMode && sensorData.temperature
-                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
-                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-orange-500'
-                      }`}
-                      placeholder="Ej: 22"
-                      readOnly={autoMode}
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={temperatura}
+                        onChange={(e) => setTemperatura(e.target.value)}
+                        className={`flex-1 border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                          autoMode && sensorData.temperature
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                            : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-orange-500'
+                        }`}
+                        placeholder="Ej: 22"
+                        readOnly={autoMode}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fetchLatestAndFill('temp')}
+                        disabled={!selectedDevice}
+                        title="Autorrellenar temp. desde sensor"
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.temp ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
+                      >
+                        ⤓
+                      </button>
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Rango típico: 10 - 35°C</p>
                   </div>
                 </div>
@@ -1159,7 +1353,28 @@ function App() {
                         {sensorData.isLoading ? '⏳' : '🔄'}
                       </button>
                     )}
+                    {/* Device selector for autofill */}
+                    <div className="ml-3">
+                      <select
+                        value={selectedDevice}
+                        onChange={(e) => setSelectedDevice(e.target.value)}
+                        className="text-sm rounded-lg border px-2 py-1 bg-white dark:bg-gray-700"
+                      >
+                        <option value="">Sensor (opcional)</option>
+                        {devices.map(d => (
+                          <option key={d.deviceId} value={d.deviceId}>{d.deviceId}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
+                </div>
+                {/* Device selector inside the suggested form */}
+                <div className="mt-3 w-full md:w-auto">
+                  <label className="text-xs text-gray-500 mb-1 block">Sensor (opcional)</label>
+                  <select value={selectedDevice} onChange={(e) => setSelectedDevice(e.target.value)} className="rounded-lg px-2 py-1 text-sm w-full md:w-64 bg-white dark:bg-gray-700 border">
+                    <option value="">-- Ninguno --</option>
+                    {devices.map(d => <option key={d.deviceId} value={d.deviceId}>{d.deviceId}</option>)}
+                  </select>
                 </div>
                 
                 {sensorData.lastUpdate && (
@@ -1179,19 +1394,30 @@ function App() {
                       </span>
                     )}
                   </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={ph}
-                    onChange={(e) => setPh(e.target.value)}
-                    className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
-                      autoMode && sensorData.ph
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
-                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
-                    }`}
-                    placeholder="Ej: 6.5"
-                    readOnly={autoMode}
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={ph}
+                      onChange={(e) => setPh(e.target.value)}
+                      className={`flex-1 border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                        autoMode && sensorData.ph
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
+                      }`}
+                      placeholder="Ej: 6.5"
+                      readOnly={autoMode}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fetchLatestAndFill('ph')}
+                      disabled={!selectedDevice}
+                      title="Autorrellenar pH desde sensor"
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.ph ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
+                    >
+                      ⤓
+                    </button>
+                  </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Nivel de acidez/alcalinidad del suelo</p>
                 </div>
 
@@ -1204,18 +1430,29 @@ function App() {
                       </span>
                     )}
                   </label>
-                  <input
-                    type="number"
-                    value={humedad}
-                    onChange={(e) => setHumedad(e.target.value)}
-                    className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
-                      autoMode && sensorData.humidity
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
-                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
-                    }`}
-                    placeholder="Ej: 70"
-                    readOnly={autoMode}
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={humedad}
+                      onChange={(e) => setHumedad(e.target.value)}
+                      className={`flex-1 border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                        autoMode && sensorData.humidity
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
+                      }`}
+                      placeholder="Ej: 70"
+                      readOnly={autoMode}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fetchLatestAndFill('humedad')}
+                      disabled={!selectedDevice}
+                      title="Autorrellenar humedad desde sensor"
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.humedad ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
+                    >
+                      ⤓
+                    </button>
+                  </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Porcentaje de humedad disponible</p>
                 </div>
 
@@ -1228,18 +1465,29 @@ function App() {
                       </span>
                     )}
                   </label>
-                  <input
-                    type="number"
-                    value={temperatura}
-                    onChange={(e) => setTemperatura(e.target.value)}
-                    className={`w-full border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
-                      autoMode && sensorData.temperature
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
-                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
-                    }`}
-                    placeholder="Ej: 22"
-                    readOnly={autoMode}
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={temperatura}
+                      onChange={(e) => setTemperatura(e.target.value)}
+                      className={`flex-1 border rounded-2xl p-4 text-gray-800 dark:text-white focus:ring-2 focus:border-transparent transition-all ${
+                        autoMode && sensorData.temperature
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 focus:ring-blue-500'
+                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-blue-500'
+                      }`}
+                      placeholder="Ej: 22"
+                      readOnly={autoMode}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fetchLatestAndFill('temp')}
+                      disabled={!selectedDevice}
+                      title="Autorrellenar temp. desde sensor"
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${autoPress.temp ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'} hover:shadow`}
+                    >
+                      ⤓
+                    </button>
+                  </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Temperatura ambiente promedio</p>
                 </div>
               </div>
