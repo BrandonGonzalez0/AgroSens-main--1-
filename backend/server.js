@@ -141,11 +141,27 @@ const start = async () => {
   // Progressive rate limiting
   app.use(progressiveRateLimit);
   
-  app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  const allowedOrigins = [
+  "http://localhost:5173",
+  "https://agrosensprincipal1.vercel.app"
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Permitir herramientas como Postman o solicitudes sin origin
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("CORS bloqueado para: " + origin));
+      }
+    },
     credentials: true,
-    optionsSuccessStatus: 200
-  }));
+  })
+);
+
   
   // Session configuration with mandatory secret
   if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
