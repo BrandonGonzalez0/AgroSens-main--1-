@@ -1,274 +1,275 @@
-# 🌱 AgroSens - Sistema Inteligente de Cultivos
+# 🌱 AgroSens - Sistema de Monitoreo Agrícola Inteligente
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
-[![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)
-[![Security](https://img.shields.io/badge/Security-Enhanced-red.svg)](./SECURITY_FIXES.md)
+Sistema completo de monitoreo agrícola con sensores IoT, análisis de IA y gestión de cultivos en tiempo real.
 
-AgroSens es una aplicación web progresiva (PWA) que combina IoT, inteligencia artificial y análisis de datos para optimizar la agricultura de precisión. Permite monitorear condiciones del suelo, validar cultivos y recibir recomendaciones inteligentes.
+## 🚀 Características Principales
 
-## ✨ Características Principales
+- **📊 Monitoreo en Tiempo Real**: Sensores de humedad, temperatura, pH y más
+- **🤖 Análisis con IA**: Detección de plagas y enfermedades usando TensorFlow
+- **📱 PWA Completa**: Funciona offline en móviles y escritorio
+- **🌐 API REST**: Backend robusto con MongoDB
+- **🔒 Seguridad**: Autenticación, CSRF, rate limiting
+- **📍 Geolocalización**: Mapeo GPS de cultivos
+- **⚡ Tiempo Real**: MQTT para datos instantáneos
 
-- 🌡️ **Monitoreo en Tiempo Real**: Sensores Arduino para pH, humedad y temperatura
-- 🤖 **Análisis con IA**: Detección de plagas y evaluación de madurez de cultivos
-- 📱 **PWA Completa**: Funciona offline con sincronización automática
-- 🔒 **Seguridad Avanzada**: Protección CSRF, validación de entrada y rate limiting
-- 📊 **Dashboard Interactivo**: Visualización de datos con gráficos en tiempo real
-- 🌐 **Modo Offline**: Almacenamiento local con cola de sincronización
-- 📸 **Análisis de Imágenes**: Captura y análisis de fotos de cultivos
+## 🛠️ Tecnologías
 
-## 🚀 Inicio Rápido
+### Frontend
+- **React 18** + **Vite**
+- **TailwindCSS** para estilos
+- **TensorFlow.js** para IA
+- **PWA** con service workers
+- **Recharts** para gráficos
 
-### Prerrequisitos
+### Backend
+- **Node.js** + **Express**
+- **MongoDB** con Mongoose
+- **MQTT** para IoT
+- **JWT** + **bcrypt** para auth
+- **Helmet** + **CORS** para seguridad
 
-- Node.js 18+
-- MongoDB (opcional, funciona sin base de datos)
-- Arduino con sensores (opcional, incluye datos simulados)
+### Hardware
+- **ESP32** con sensores
+- **Arduino IDE** compatible
+- **MQTT** para comunicación
 
-### Instalación
+## 📦 Instalación Rápida
 
-1. **Clonar el repositorio**
+### Opción 1: Script Automático (Recomendado)
+
+**Windows:**
 ```bash
+start-dev.bat
+```
+
+**Linux/Mac:**
+```bash
+chmod +x start-dev.sh
+./start-dev.sh
+```
+
+### Opción 2: Manual
+
+```bash
+# 1. Clonar repositorio
 git clone https://github.com/tu-usuario/agrosens.git
 cd agrosens
-```
 
-2. **Instalar dependencias de seguridad**
-```bash
-# Windows
-install-security-deps.bat
+# 2. Instalar dependencias
+npm run install:all
 
-# Linux/Mac
-chmod +x install-security-deps.sh
-./install-security-deps.sh
-```
-
-3. **Configurar variables de entorno**
-```bash
-cd backend
+# 3. Configurar variables de entorno
 cp .env.example .env
-# Editar .env con tus configuraciones
-```
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 
-4. **Iniciar la aplicación**
-```bash
-# Terminal 1 - Backend
-cd backend
+# 4. Iniciar desarrollo
 npm run dev
-
-# Terminal 2 - Frontend
-cd frontend
-npm start
 ```
 
-5. **Acceder a la aplicación**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
-
-## 🏗️ Arquitectura
-
-```
-AgroSens/
-├── frontend/          # React PWA
-│   ├── src/
-│   │   ├── components/    # Componentes React
-│   │   ├── hooks/         # Custom hooks
-│   │   ├── utils/         # Utilidades y API client
-│   │   └── data/          # Datos estáticos
-├── backend/           # Node.js + Express API
-│   ├── routes/            # Endpoints de API
-│   ├── models/            # Modelos de MongoDB
-│   ├── middleware/        # Middleware de seguridad
-│   └── ml/               # Scripts de ML
-└── docs/             # Documentación
-```
-
-## 🔧 Configuración
+## ⚙️ Configuración
 
 ### Variables de Entorno
 
+**Backend (.env):**
 ```env
-# Base de datos
-MONGO_URI=mongodb://localhost:27017/agrosens
-
-# Servidor
 PORT=5000
 NODE_ENV=development
-FRONTEND_URL=http://localhost:3000
-
-# Seguridad
+MONGO_URI=mongodb://localhost:27017/agrosens
 SESSION_SECRET=tu-secreto-super-seguro
 CSRF_SECRET=tu-secreto-csrf
-
-# Límites
-MAX_FILE_SIZE=2097152
-RATE_LIMIT_MAX_REQUESTS=100
+FRONTEND_URL=http://localhost:5173
 ```
 
-### Sensores Arduino
-
-```cpp
-// Código básico para sensores
-void setup() {
-  Serial.begin(9600);
-}
-
-void loop() {
-  float ph = analogRead(A0) * (14.0/1023.0);
-  float humidity = analogRead(A1) * (100.0/1023.0);
-  float temperature = analogRead(A2) * (50.0/1023.0);
-  
-  Serial.print("pH:");
-  Serial.print(ph);
-  Serial.print(",Humidity:");
-  Serial.print(humidity);
-  Serial.print(",Temperature:");
-  Serial.println(temperature);
-  
-  delay(5000);
-}
+**Frontend (.env):**
+```env
+VITE_API_URL=http://localhost:5000
+VITE_APP_NAME=AgroSens
 ```
 
-## 🛡️ Seguridad
+## 🌐 URLs de Acceso
 
-AgroSens implementa múltiples capas de seguridad:
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:5000
+- **Health Check**: http://localhost:5000/health
+- **API Docs**: http://localhost:5000/api
 
-- ✅ **Protección CSRF** con tokens seguros
-- ✅ **Sanitización de entrada** contra XSS
-- ✅ **Rate limiting** progresivo
-- ✅ **Validación de archivos** con firmas
-- ✅ **Headers de seguridad** completos
-- ✅ **Prevención de path traversal**
-- ✅ **Protección SSRF**
-
-Ver [SECURITY_FIXES.md](./SECURITY_FIXES.md) para detalles completos.
-
-## 📱 Funcionalidades
-
-### Validación de Cultivos
-- Ingreso manual o automático de datos de sensores
-- Validación contra base de datos de cultivos
-- Recomendaciones personalizadas
-
-### Análisis con IA
-- Detección de plagas en imágenes
-- Evaluación de madurez de cultivos
-- Generación de mapas de calor
-
-### Dashboard de Telemetría
-- Gráficos en tiempo real
-- Estadísticas históricas
-- Alertas automáticas
-
-### Modo Offline
-- Almacenamiento local de datos
-- Cola de sincronización
-- Funcionalidad completa sin conexión
-
-## 🔌 API Endpoints
+## 📡 API Endpoints
 
 ### Sensores
-```
-GET  /api/sensores/latest    # Última lectura
-POST /api/sensores           # Nueva lectura
-```
-
-### Análisis IA
-```
-GET  /api/ia                 # Obtener análisis
-POST /api/ia                 # Crear análisis
-DELETE /api/ia/:id           # Eliminar análisis
+```bash
+POST /api/sensors/v1/readings          # Guardar lecturas
+GET  /api/sensors/v1/devices           # Listar dispositivos
+GET  /api/sensors/v1/devices/:id/latest # Última lectura
 ```
 
 ### Cultivos
+```bash
+GET    /api/cultivos                   # Listar cultivos
+POST   /api/cultivos                   # Crear cultivo
+PUT    /api/cultivos/:id               # Actualizar cultivo
+DELETE /api/cultivos/:id               # Eliminar cultivo
 ```
-GET  /api/cultivos           # Lista de cultivos
-GET  /api/cultivos/:id       # Cultivo específico
+
+### IA y Análisis
+```bash
+POST /api/ia/analyze-image             # Análisis de imagen
+GET  /api/ia/models                    # Modelos disponibles
 ```
+
+## 🔧 Comandos Disponibles
+
+```bash
+# Desarrollo
+npm run dev              # Frontend + Backend
+npm run frontend         # Solo frontend
+npm run backend          # Solo backend
+
+# Instalación
+npm run install:all      # Instalar todo
+
+# Producción
+npm run build           # Build frontend
+npm start              # Iniciar producción
+
+# Utilidades
+npm run seed:users      # Crear usuarios de prueba
+npm run hash:password   # Generar hash de contraseña
+```
+
+## 📱 Uso del Sistema
+
+### 1. Configurar Sensores
+```json
+{
+  "deviceId": "sensor-001",
+  "humedad_suelo": 65.5,
+  "temperatura_aire": 24.3,
+  "humedad_aire": 78.2,
+  "ph_suelo": 6.8
+}
+```
+
+### 2. Crear Cultivos
+- Acceder a la sección "Cultivos"
+- Agregar nuevo cultivo con ubicación GPS
+- Configurar alertas y umbrales
+
+### 3. Análisis con IA
+- Tomar foto de planta
+- El sistema detecta automáticamente plagas/enfermedades
+- Recibir recomendaciones de tratamiento
+
+## 🔒 Seguridad
+
+- **Autenticación JWT** con refresh tokens
+- **Protección CSRF** automática
+- **Rate limiting** (120 req/min)
+- **Sanitización** de entrada
+- **Headers de seguridad** con Helmet
+- **Validación** de datos con Validator
+
+## 📊 Monitoreo
+
+### Métricas Disponibles
+- Humedad del suelo (%)
+- Temperatura del aire (°C)
+- Humedad del aire (%)
+- pH del suelo
+- Estado de conexión de sensores
+
+### Alertas Automáticas
+- Niveles críticos de humedad
+- Temperaturas extremas
+- Desconexión de sensores
+- Detección de plagas
 
 ## 🧪 Testing
 
 ```bash
-# Backend tests
+# Backend
 cd backend
 npm test
 
-# Frontend tests
+# Frontend
 cd frontend
 npm test
 
-# Security tests
-npm run security-audit
+# E2E
+npm run test:e2e
 ```
 
-## 📦 Despliegue
+## 📁 Estructura del Proyecto
 
-### Producción
-
-1. **Configurar variables de entorno**
-```bash
-NODE_ENV=production
-SESSION_SECRET=secreto-super-seguro-produccion
-MONGO_URI=mongodb://tu-servidor/agrosens
 ```
-
-2. **Build y deploy**
-```bash
-cd frontend
-npm run build
-
-cd ../backend
-npm start
-```
-
-### Docker
-
-```dockerfile
-# Dockerfile incluido en el proyecto
-docker build -t agrosens .
-docker run -p 5000:5000 agrosens
+AgroSens/
+├── frontend/           # React PWA
+│   ├── src/
+│   │   ├── components/ # Componentes React
+│   │   ├── utils/      # Utilidades y API
+│   │   └── hooks/      # Custom hooks
+├── backend/            # Node.js API
+│   ├── models/         # Modelos MongoDB
+│   ├── routes/         # Rutas API
+│   ├── middleware/     # Middlewares
+│   └── services/       # Servicios
+├── hardware/           # Código Arduino
+│   └── esp32/          # Sketches ESP32
+├── docs/              # Documentación
+└── scripts/           # Scripts de utilidad
 ```
 
 ## 🤝 Contribuir
 
 1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-### Guías de Contribución
-
-- Seguir las convenciones de código existentes
-- Incluir tests para nuevas funcionalidades
-- Actualizar documentación cuando sea necesario
-- Verificar que pasan todas las pruebas de seguridad
+2. Crear rama feature (`git checkout -b feature/nueva-funcionalidad`)
+3. Commit cambios (`git commit -m 'Agregar nueva funcionalidad'`)
+4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
+5. Abrir Pull Request
 
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para detalles.
 
-## 🙏 Agradecimientos
+## 🆘 Soporte
 
-- [Create React App](https://github.com/facebook/create-react-app) - Bootstrap del frontend
-- [Express.js](https://expressjs.com/) - Framework del backend
-- [MongoDB](https://www.mongodb.com/) - Base de datos
-- [TensorFlow.js](https://www.tensorflow.org/js) - Machine Learning
-- [Tailwind CSS](https://tailwindcss.com/) - Estilos
-- [Framer Motion](https://www.framer.com/motion/) - Animaciones
+### Problemas Comunes
 
-## 📞 Soporte
+**Error de conexión:**
+```bash
+# Verificar servicios
+curl http://localhost:5000/health
+```
 
-- 📧 Email: soporte@agrosens.com
-- 🐛 Issues: [GitHub Issues](https://github.com/tu-usuario/agrosens/issues)
-- 📖 Documentación: [Wiki](https://github.com/tu-usuario/agrosens/wiki)
-- 💬 Discusiones: [GitHub Discussions](https://github.com/tu-usuario/agrosens/discussions)
+**Puerto ocupado:**
+```bash
+# Windows
+netstat -ano | findstr :5000
+taskkill /PID <PID> /F
+
+# Linux/Mac
+lsof -ti:5000 | xargs kill -9
+```
+
+### Contacto
+
+- **Issues**: [GitHub Issues](https://github.com/tu-usuario/agrosens/issues)
+- **Documentación**: [/docs](./docs/)
+- **Wiki**: [GitHub Wiki](https://github.com/tu-usuario/agrosens/wiki)
+
+## 🎯 Roadmap
+
+- [ ] Dashboard avanzado con métricas
+- [ ] Integración con más sensores
+- [ ] App móvil nativa
+- [ ] Machine Learning mejorado
+- [ ] API GraphQL
+- [ ] Notificaciones push
+- [ ] Exportación de datos
+- [ ] Multi-idioma
 
 ---
 
-<div align="center">
-  <p>Hecho con ❤️ para la agricultura del futuro</p>
-  <p>
-    <a href="#-agrosens---sistema-inteligente-de-cultivos">⬆️ Volver arriba</a>
-  </p>
-</div>
+**⭐ Si te gusta el proyecto, dale una estrella en GitHub!**
+
+Desarrollado con ❤️ para la agricultura inteligente
